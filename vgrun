@@ -1,0 +1,7 @@
+#!/bin/bash
+#assumption: with np=1
+if [ -z $contained ]
+then
+  LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PWD/arpack-ng-3.1.5/lib64/
+fi
+valgrind -v --tool=memcheck --leak-check=yes --track-origins=yes --num-callers=20 --gen-suppressions=yes ./bin/DDalphaAMG_devel $2

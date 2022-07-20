@@ -1,0 +1,1744 @@
+
++- subspace correction methods for QCD applications -+
+|                                                    |
+|  Use option >> -? << for help                      |
+|                                                    |
++----------------------------------------------------+
+
+
+Number of Processes: 32
+Program is being started...
+
+
+
++----------------------------------------------------------+
+| The DDalphaAMG solver library.                           |
+| Copyright (C) 2016, Matthias Rottmann, Artur Strebel,    |
+|       Simon Heybrock, Simone Bacchio, Bjoern Leder.      |
+|                                                          |
+| This program comes with ABSOLUTELY NO WARRANTY.          |
++----------------------------------------------------------+
+
+configuration: conf/8x8x8x8b6.0000id3n1
+
+Desired average plaquette: 1.7772950976130 in [0,3]
+BASIS4: tmLQCD basis
+antiperiodic in time boundary conditions
+Configuration stored...
+average plaquette: 0.5924316992043
+
++----------------------------------------------------------+
+| read in and set up the parallel dirac operator           |
+| elapsed wall clock time: 0.0092674    seconds            |
++----------------------------------------------------------+
+initial definition --- depth: 0
+depth: 0, time spent for setting up next coarser operator: 0.053046 seconds
+initial definition --- depth: 1
+depth: 1, time spent for setting up next coarser operator: 0.078310 seconds
+initial definition --- depth: 2
+depth: 2, time spent for setting up next coarser operator: 0.021071 seconds
+
+initial coarse grid correction is defined
+elapsed time: 1.196999 seconds
+
++----------------------------------------------------------+
+| 4-level method                                           |
+| postsmoothing K-cycle                                    |
+| FGMRES + red-black multiplicative Schwarz                |
+|          restart length: 20                              |
+|                      m0: -0.100000                       |
+|                     csw: +1.000000                       |
+|                      mu: +1.000000                       |
++----------------------------------------------------------+
+|   preconditioner cycles: 1                               |
+|            inner solver: minimal residual iteration      |
+|               precision: double                          |
++---------------------- depth  0 --------------------------+
+|          global lattice: 8   8   8   8                   |
+|           local lattice: 1   2   8   8                   |
+|           block lattice: 1   1   2   2                   |
+|        post smooth iter: 3                               |
+|     smoother inner iter: 4                               |
+|              setup iter: 2                               |
+|            test vectors: 28                              |
++---------------------- depth  1 --------------------------+
+|          global lattice: 8   8   4   4                   |
+|           local lattice: 1   2   4   4                   |
+|           block lattice: 1   1   2   2                   |
+|        post smooth iter: 3                               |
+|     smoother inner iter: 4                               |
+|              setup iter: 2                               |
+|            test vectors: 32                              |
++---------------------- depth  2 --------------------------+
+|          global lattice: 8   8   2   2                   |
+|           local lattice: 1   2   2   2                   |
+|           block lattice: 1   1   2   1                   |
+|        post smooth iter: 3                               |
+|     smoother inner iter: 4                               |
+|              setup iter: 2                               |
+|            test vectors: 32                              |
++---------------------- depth  3 --------------------------+
+|          global lattice: 8   8   1   2                   |
+|           local lattice: 1   2   1   2                   |
+|           block lattice: 1   1   1   1                   |
+|      coarge grid solver: GMRES                           |
+|              iterations: 10                              |
+|                  cycles: 50                              |
+|               tolerance: 1e-01                           |
++----------------------------------------------------------+
+|          K-cycle length: 5                               |
+|        K-cycle restarts: 2                               |
+|       K-cycle tolerance: 1e-01                           |
++----------------------------------------------------------+
+
+
++----------------------------------------------------------+
+| solver profiling                                         |
++----------------------------------------------------------+
+| depth:   0 / level:   3                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 5.11e-04(     28) |
+|      2 flop vector operations, double: 4.41e-04(    196) |
+|      8 flop vector operations, double: 4.50e-03(   1344) |
+|               copy operations, double: 1.88e-03(    793) |
+|          set value operations, double: 3.43e-03(   5572) |
+| interpolation and restriction, double: 2.15e-03(     28) |
+|                 self coupling, double: 1.40e-02(  21504) |
+|                      smoother, double: 1.03e-01(    168) |
+|            operator comm init, double: 8.65e-04(   1008) |
+|            operator comm wait, double: 5.76e-02(   1008) |
+|                    allreduces, double: 4.26e-04(     28) |
+|    Gram-Schmidt on aggregates, double: 1.89e-03(      1) |
+|     smoother - pt 3, res comm, double: 4.63e-03(   5376) |
+|   smoother - pt 4, solve comm, double: 3.48e-02(   5376) |
+|          global inner product, double: 5.11e-04(     28) |
+|      2 flop vector operations, double: 4.41e-04(    196) |
+|      8 flop vector operations, double: 4.50e-03(   1344) |
+|               copy operations, double: 1.88e-03(    793) |
+|          set value operations, double: 3.43e-03(   5572) |
+| interpolation and restriction, double: 2.15e-03(     28) |
+|                 self coupling, double: 1.40e-02(  21504) |
+|                      smoother, double: 1.03e-01(    168) |
+|            operator comm init, double: 8.65e-04(   1008) |
+|            operator comm wait, double: 5.76e-02(   1008) |
+|                    allreduces, double: 4.26e-04(     28) |
+|    Gram-Schmidt on aggregates, double: 1.89e-03(      1) |
+|     smoother - pt 3, res comm, double: 4.63e-03(   5376) |
+|   smoother - pt 4, solve comm, double: 3.48e-02(   5376) |
++----------------------------------------------------------+
+| depth:   1 / level:   2                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 3.76e-04(     32) |
+|      2 flop vector operations, double: 8.23e-04(    224) |
+|      8 flop vector operations, double: 4.57e-03(   1536) |
+|               copy operations, double: 1.20e-02(   1568) |
+|          set value operations, double: 6.99e-03(   4133) |
+| interpolation and restriction, double: 2.99e-03(     32) |
+|                      smoother, double: 6.97e-01(    192) |
+|            operator comm init, double: 1.06e-03(   1152) |
+|            operator comm wait, double: 3.10e-02(   1152) |
+|                    allreduces, double: 1.93e-04(     32) |
+|    Gram-Schmidt on aggregates, double: 1.86e-03(      1) |
+|     smoother - pt 3, res comm, double: 2.11e-01(   1536) |
+|   smoother - pt 4, solve comm, double: 4.46e-01(   1536) |
+|          global inner product, double: 3.76e-04(     32) |
+|      2 flop vector operations, double: 8.23e-04(    224) |
+|      8 flop vector operations, double: 4.57e-03(   1536) |
+|               copy operations, double: 1.20e-02(   1568) |
+|          set value operations, double: 6.99e-03(   4133) |
+| interpolation and restriction, double: 2.99e-03(     32) |
+|                      smoother, double: 6.97e-01(    192) |
+|            operator comm init, double: 1.06e-03(   1152) |
+|            operator comm wait, double: 3.10e-02(   1152) |
+|                    allreduces, double: 1.93e-04(     32) |
+|    Gram-Schmidt on aggregates, double: 1.86e-03(      1) |
+|     smoother - pt 3, res comm, double: 2.11e-01(   1536) |
+|   smoother - pt 4, solve comm, double: 4.46e-01(   1536) |
++----------------------------------------------------------+
+| depth:   2 / level:   1                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 2.22e-04(     32) |
+|      2 flop vector operations, double: 1.81e-04(    224) |
+|      8 flop vector operations, double: 1.45e-03(   1536) |
+|               copy operations, double: 3.73e-03(   1664) |
+|          set value operations, double: 1.92e-03(   1825) |
+|                      smoother, double: 1.80e-01(    192) |
+|            operator comm init, double: 6.57e-04(   1152) |
+|            operator comm wait, double: 7.06e-03(   1152) |
+|                    allreduces, double: 1.46e-04(     32) |
+|    Gram-Schmidt on aggregates, double: 5.51e-04(      1) |
+|     smoother - pt 3, res comm, double: 5.92e-02(    768) |
+|   smoother - pt 4, solve comm, double: 1.09e-01(    768) |
+|          global inner product, double: 2.22e-04(     32) |
+|      2 flop vector operations, double: 1.81e-04(    224) |
+|      8 flop vector operations, double: 1.45e-03(   1536) |
+|               copy operations, double: 3.73e-03(   1664) |
+|          set value operations, double: 1.92e-03(   1825) |
+|                      smoother, double: 1.80e-01(    192) |
+|            operator comm init, double: 6.57e-04(   1152) |
+|            operator comm wait, double: 7.06e-03(   1152) |
+|                    allreduces, double: 1.46e-04(     32) |
+|    Gram-Schmidt on aggregates, double: 5.51e-04(      1) |
+|     smoother - pt 3, res comm, double: 5.92e-02(    768) |
+|   smoother - pt 4, solve comm, double: 1.09e-01(    768) |
++----------------------------------------------------------+
+| depth:   3 / level:   0                time    ( count ) |
++----------------------------------------------------------+
+|          set value operations, double: 7.45e-06(      1) |
+|          set value operations, double: 7.45e-06(      1) |
++----------------------------------------------------------+
+| flop/lattice site:  9.05e+07                             |
+| flop/s/MPIprocess:  9.68e+09                             |
++----------------------------------------------------------+
+
+depth: 0, bootstrap step number 1...
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+depth: 0, time spent for setting up next coarser operator: 0.029143 seconds
+depth: 1, time spent for setting up next coarser operator: 0.077279 seconds
+depth: 2, time spent for setting up next coarser operator: 0.020847 seconds
+depth: 1, bootstrap step number 1...
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 3
+coarsest iters = 3
+coarsest iters = 3
+coarsest iters = 3
+depth: 1, time spent for setting up next coarser operator: 0.074648 seconds
+depth: 2, time spent for setting up next coarser operator: 0.021396 seconds
+depth: 2, bootstrap step number 1...
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+depth: 2, time spent for setting up next coarser operator: 0.019749 seconds
+depth: 0, bootstrap step number 2...
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+depth: 0, time spent for setting up next coarser operator: 0.026427 seconds
+depth: 1, time spent for setting up next coarser operator: 0.074621 seconds
+depth: 2, time spent for setting up next coarser operator: 0.020734 seconds
+depth: 1, bootstrap step number 1...
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+coarsest iters = 4
+depth: 1, time spent for setting up next coarser operator: 0.074228 seconds
+depth: 2, time spent for setting up next coarser operator: 0.020785 seconds
+depth: 1, bootstrap step number 2...
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 9
+coarsest iters = 10
+depth: 1, time spent for setting up next coarser operator: 0.074934 seconds
+depth: 2, time spent for setting up next coarser operator: 0.021853 seconds
+depth: 2, bootstrap step number 1...
+coarsest iters = 8
+coarsest iters = 8
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 9
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 11
+coarsest iters = 11
+coarsest iters = 11
+coarsest iters = 11
+depth: 2, time spent for setting up next coarser operator: 0.019818 seconds
+depth: 2, bootstrap step number 2...
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 7
+coarsest iters = 6
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 7
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 6
+coarsest iters = 6
+depth: 2, time spent for setting up next coarser operator: 0.019653 seconds
+
+performed 2 iterative setup steps
+elapsed time: 8.161039 seconds (4.561332 seconds on coarse grid)
+
+
++----------------------------------------------------------+
+| solver profiling                                         |
++----------------------------------------------------------+
+| depth:   0 / level:   3                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 9.81e-04(    112) |
+|         process inner product, double: 2.02e-03(     56) |
+|      2 flop vector operations, double: 1.15e-03(    336) |
+|      8 flop vector operations, double: 8.36e-03(   2100) |
+|       other vector operations, double: 6.25e-03(      2) |
+|               copy operations, double: 2.20e-03(    672) |
+|          set value operations, double: 4.29e-04(   5376) |
+| interpolation and restriction, double: 1.50e-02(    112) |
+|                 self coupling, double: 1.55e-02(  23296) |
+|                      smoother, double: 7.07e-02(    168) |
+|            operator comm init, double: 7.81e-04(   1344) |
+|            operator comm wait, double: 1.56e-02(   1344) |
+|                    allreduces, double: 2.43e-03(    166) |
+|    Gram-Schmidt on aggregates, double: 3.59e-03(      2) |
+|     smoother - pt 3, res comm, double: 1.19e-02(   5376) |
+|   smoother - pt 4, solve comm, double: 3.64e-02(   5376) |
+|          global inner product, double: 9.81e-04(    112) |
+|         process inner product, double: 2.02e-03(     56) |
+|      2 flop vector operations, double: 1.15e-03(    336) |
+|      8 flop vector operations, double: 8.36e-03(   2100) |
+|       other vector operations, double: 6.25e-03(      2) |
+|               copy operations, double: 2.20e-03(    672) |
+|          set value operations, double: 4.29e-04(   5376) |
+| interpolation and restriction, double: 1.50e-02(    112) |
+|                 self coupling, double: 1.55e-02(  23296) |
+|                      smoother, double: 7.07e-02(    168) |
+|            operator comm init, double: 7.81e-04(   1344) |
+|            operator comm wait, double: 1.56e-02(   1344) |
+|                    allreduces, double: 2.43e-03(    166) |
+|    Gram-Schmidt on aggregates, double: 3.59e-03(      2) |
+|     smoother - pt 3, res comm, double: 1.19e-02(   5376) |
+|   smoother - pt 4, solve comm, double: 3.64e-02(   5376) |
++----------------------------------------------------------+
+| depth:   1 / level:   2                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 5.38e-03(    444) |
+|         process inner product, double: 6.05e-03(    236) |
+|      2 flop vector operations, double: 8.12e-03(   1388) |
+|      6 flop vector operations, double: 5.43e-04(     56) |
+|      8 flop vector operations, double: 2.11e-02(   7488) |
+|       other vector operations, double: 1.22e-02(      3) |
+|               copy operations, double: 2.62e-02(   4156) |
+|          set value operations, double: 1.16e-02(  17786) |
+| interpolation and restriction, double: 8.34e-02(    472) |
+|                 self coupling, double: 4.17e-02(    140) |
+|             neighbor coupling, double: 2.94e-01(    140) |
+|                      smoother, double: 3.06e+00(    708) |
+|            operator comm init, double: 4.82e-03(   6224) |
+|            operator comm wait, double: 1.38e-01(   6224) |
+|                    allreduces, double: 2.58e-02(    677) |
+|    Gram-Schmidt on aggregates, double: 1.86e-02(     10) |
+|     smoother - pt 3, res comm, double: 1.25e+00(   5664) |
+|   smoother - pt 4, solve comm, double: 1.66e+00(   5664) |
+|          Hessenberg: qr update double: 2.11e-05(   1512) |
+|         Hessenberg: bkwd subst double: 9.87e-06(    392) |
+|          global inner product, double: 5.38e-03(    444) |
+|         process inner product, double: 6.05e-03(    236) |
+|      2 flop vector operations, double: 8.12e-03(   1388) |
+|      6 flop vector operations, double: 5.43e-04(     56) |
+|      8 flop vector operations, double: 2.11e-02(   7488) |
+|       other vector operations, double: 1.22e-02(      3) |
+|               copy operations, double: 2.62e-02(   4156) |
+|          set value operations, double: 1.16e-02(  17786) |
+| interpolation and restriction, double: 8.34e-02(    472) |
+|                 self coupling, double: 4.17e-02(    140) |
+|             neighbor coupling, double: 2.94e-01(    140) |
+|                      smoother, double: 3.06e+00(    708) |
+|            operator comm init, double: 4.82e-03(   6224) |
+|            operator comm wait, double: 1.38e-01(   6224) |
+|                    allreduces, double: 2.58e-02(    677) |
+|    Gram-Schmidt on aggregates, double: 1.86e-02(     10) |
+|     smoother - pt 3, res comm, double: 1.25e+00(   5664) |
+|   smoother - pt 4, solve comm, double: 1.66e+00(   5664) |
+|          Hessenberg: qr update double: 2.11e-05(   1512) |
+|         Hessenberg: bkwd subst double: 9.87e-06(    392) |
++----------------------------------------------------------+
+| depth:   2 / level:   1                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 3.58e-02(   1016) |
+|         process inner product, double: 3.33e-03(    532) |
+|      2 flop vector operations, double: 5.05e-03(   3144) |
+|      6 flop vector operations, double: 6.30e-04(    236) |
+|      8 flop vector operations, double: 1.29e-02(  15120) |
+|       other vector operations, double: 6.22e-03(      3) |
+|               copy operations, double: 2.24e-02(  10184) |
+|          set value operations, double: 7.02e-03(  14135) |
+| interpolation and restriction, double: 5.74e-02(   1064) |
+|                 self coupling, double: 3.85e-02(    436) |
+|             neighbor coupling, double: 2.17e-01(    436) |
+|                      smoother, double: 1.90e+00(   1596) |
+|            operator comm init, double: 7.91e-03(  14512) |
+|            operator comm wait, double: 1.32e-01(  14512) |
+|                    allreduces, double: 6.39e-02(   1545) |
+|    Gram-Schmidt on aggregates, double: 1.10e-02(     16) |
+|     smoother - pt 3, res comm, double: 8.82e-01(   6384) |
+|   smoother - pt 4, solve comm, double: 8.62e-01(   6384) |
+|          Hessenberg: qr update double: 6.89e-05(   3984) |
+|         Hessenberg: bkwd subst double: 4.27e-05(   1100) |
+|          global inner product, double: 3.58e-02(   1016) |
+|         process inner product, double: 3.33e-03(    532) |
+|      2 flop vector operations, double: 5.05e-03(   3144) |
+|      6 flop vector operations, double: 6.30e-04(    236) |
+|      8 flop vector operations, double: 1.29e-02(  15120) |
+|       other vector operations, double: 6.22e-03(      3) |
+|               copy operations, double: 2.24e-02(  10184) |
+|          set value operations, double: 7.02e-03(  14135) |
+| interpolation and restriction, double: 5.74e-02(   1064) |
+|                 self coupling, double: 3.85e-02(    436) |
+|             neighbor coupling, double: 2.17e-01(    436) |
+|                      smoother, double: 1.90e+00(   1596) |
+|            operator comm init, double: 7.91e-03(  14512) |
+|            operator comm wait, double: 1.32e-01(  14512) |
+|                    allreduces, double: 6.39e-02(   1545) |
+|    Gram-Schmidt on aggregates, double: 1.10e-02(     16) |
+|     smoother - pt 3, res comm, double: 8.82e-01(   6384) |
+|   smoother - pt 4, solve comm, double: 8.62e-01(   6384) |
+|          Hessenberg: qr update double: 6.89e-05(   3984) |
+|         Hessenberg: bkwd subst double: 4.27e-05(   1100) |
++----------------------------------------------------------+
+| depth:   3 / level:   0                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 1.06e-02(    536) |
+|         process inner product, double: 1.86e-02(   4701) |
+|      2 flop vector operations, double: 3.27e-03(   5241) |
+|      6 flop vector operations, double: 4.02e-04(    532) |
+|      8 flop vector operations, double: 9.98e-03(  28327) |
+|               copy operations, double: 3.96e-04(    532) |
+|          set value operations, double: 8.37e-03(  14123) |
+|                 self coupling, double: 2.26e-01(   4705) |
+|             neighbor coupling, double: 1.05e+00(   4705) |
+|            operator comm init, double: 1.57e-02(  18820) |
+|            operator comm wait, double: 6.22e-02(  18820) |
+|                    allreduces, double: 1.72e-01(   5237) |
+|          Hessenberg: qr update double: 6.47e-04( 144948) |
+|         Hessenberg: bkwd subst double: 1.34e-04(  28859) |
+|          global inner product, double: 1.06e-02(    536) |
+|         process inner product, double: 1.86e-02(   4701) |
+|      2 flop vector operations, double: 3.27e-03(   5241) |
+|      6 flop vector operations, double: 4.02e-04(    532) |
+|      8 flop vector operations, double: 9.98e-03(  28327) |
+|               copy operations, double: 3.96e-04(    532) |
+|          set value operations, double: 8.37e-03(  14123) |
+|                 self coupling, double: 2.26e-01(   4705) |
+|             neighbor coupling, double: 1.05e+00(   4705) |
+|            operator comm init, double: 1.57e-02(  18820) |
+|            operator comm wait, double: 6.22e-02(  18820) |
+|                    allreduces, double: 1.72e-01(   5237) |
+|          Hessenberg: qr update double: 6.47e-04( 144948) |
+|         Hessenberg: bkwd subst double: 1.34e-04(  28859) |
++----------------------------------------------------------+
+| flop/lattice site:  4.54e+08                             |
+| flop/s/MPIprocess:  7.12e+09                             |
++----------------------------------------------------------+
+
+malloc of "h->X[0]" failed: pointer is not NULL (build/gsrc/hutchinson_double.c:475).
+Computing ROUGH trace through PLAIN Hutchinson ...
+rhs = first unit vector
++----------------------------------------------------------+
+coarsest iters = 6
+| approx. rel. res. after  1      iterations: 8.814661e-03 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  2      iterations: 2.674438e-04 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 11
+| approx. rel. res. after  3      iterations: 1.162471e-05 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  4      iterations: 5.014629e-07 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 11
+| approx. rel. res. after  5      iterations: 2.010997e-08 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  6      iterations: 7.432733e-10 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  7      iterations: 3.071730e-11 |
++----------------------------------------------------------+
+
++----------------------------------------------------------+
+|       FGMRES iterations: 7      coarse average: 35.43    |
+| exact relative residual: ||r||/||b|| = 3.071730e-11      |
+| elapsed wall clock time: 0.4116   seconds                |
+|        coarse grid time: 0.3980   seconds (96.7%)        |
+|        coarsest grid time: 0.0000   seconds (00.0%)        |
+|  consumed core minutes*: 2.20e-01 (solve only)           |
+|    max used mem/MPIproc: 1.05e-01 GB                     |
++----------------------------------------------------------+
+*: only correct if #MPIprocs*#threads == #CPUs
+
+
++----------------------------------------------------------+
+| solver profiling                                         |
++----------------------------------------------------------+
+| depth:   0 / level:   3                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 7.66e-05(      8) |
+|         process inner product, double: 1.18e-04(      7) |
+|      2 flop vector operations, double: 2.32e-04(     36) |
+|      6 flop vector operations, double: 1.80e-05(      1) |
+|      8 flop vector operations, double: 6.52e-04(    202) |
+|               copy operations, double: 1.93e-04(     78) |
+|          set value operations, double: 5.59e-05(    672) |
+| interpolation and restriction, double: 2.09e-03(     14) |
+|                 self coupling, double: 2.24e-03(   2919) |
+|             neighbor coupling, double: 8.21e-04(      7) |
+|                      smoother, double: 8.70e-03(     21) |
+|            operator comm init, double: 1.10e-04(    196) |
+|            operator comm wait, double: 2.24e-03(    196) |
+|                    allreduces, double: 8.65e-04(     15) |
+|     smoother - pt 3, res comm, double: 1.52e-03(    672) |
+|   smoother - pt 4, solve comm, double: 4.31e-03(    672) |
+|          Hessenberg: qr update double: 1.93e-06(    168) |
+|         Hessenberg: bkwd subst double: 9.74e-07(     35) |
+|          global inner product, double: 7.66e-05(      8) |
+|         process inner product, double: 1.18e-04(      7) |
+|      2 flop vector operations, double: 2.32e-04(     36) |
+|      6 flop vector operations, double: 1.80e-05(      1) |
+|      8 flop vector operations, double: 6.52e-04(    202) |
+|               copy operations, double: 1.93e-04(     78) |
+|          set value operations, double: 5.59e-05(    672) |
+| interpolation and restriction, double: 2.09e-03(     14) |
+|                 self coupling, double: 2.24e-03(   2919) |
+|             neighbor coupling, double: 8.21e-04(      7) |
+|                      smoother, double: 8.70e-03(     21) |
+|            operator comm init, double: 1.10e-04(    196) |
+|            operator comm wait, double: 2.24e-03(    196) |
+|                    allreduces, double: 8.65e-04(     15) |
+|     smoother - pt 3, res comm, double: 1.52e-03(    672) |
+|   smoother - pt 4, solve comm, double: 4.31e-03(    672) |
+|          Hessenberg: qr update double: 1.93e-06(    168) |
+|         Hessenberg: bkwd subst double: 9.74e-07(     35) |
++----------------------------------------------------------+
+| depth:   1 / level:   2                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 2.29e-04(     20) |
+|         process inner product, double: 1.41e-04(     13) |
+|      2 flop vector operations, double: 4.89e-04(     72) |
+|      6 flop vector operations, double: 6.46e-05(      7) |
+|      8 flop vector operations, double: 9.87e-04(    337) |
+|               copy operations, double: 5.31e-04(    150) |
+|          set value operations, double: 2.95e-04(    338) |
+| interpolation and restriction, double: 4.64e-03(     26) |
+|                 self coupling, double: 3.89e-03(     13) |
+|             neighbor coupling, double: 2.70e-02(     13) |
+|                      smoother, double: 1.70e-01(     39) |
+|            operator comm init, double: 2.72e-04(    364) |
+|            operator comm wait, double: 8.26e-03(    364) |
+|                    allreduces, double: 1.84e-03(     33) |
+|     smoother - pt 3, res comm, double: 6.81e-02(    312) |
+|   smoother - pt 4, solve comm, double: 9.33e-02(    312) |
+|          Hessenberg: qr update double: 1.93e-06(    114) |
+|         Hessenberg: bkwd subst double: 6.83e-07(     32) |
+|          global inner product, double: 2.29e-04(     20) |
+|         process inner product, double: 1.41e-04(     13) |
+|      2 flop vector operations, double: 4.89e-04(     72) |
+|      6 flop vector operations, double: 6.46e-05(      7) |
+|      8 flop vector operations, double: 9.87e-04(    337) |
+|               copy operations, double: 5.31e-04(    150) |
+|          set value operations, double: 2.95e-04(    338) |
+| interpolation and restriction, double: 4.64e-03(     26) |
+|                 self coupling, double: 3.89e-03(     13) |
+|             neighbor coupling, double: 2.70e-02(     13) |
+|                      smoother, double: 1.70e-01(     39) |
+|            operator comm init, double: 2.72e-04(    364) |
+|            operator comm wait, double: 8.26e-03(    364) |
+|                    allreduces, double: 1.84e-03(     33) |
+|     smoother - pt 3, res comm, double: 6.81e-02(    312) |
+|   smoother - pt 4, solve comm, double: 9.33e-02(    312) |
+|          Hessenberg: qr update double: 1.93e-06(    114) |
+|         Hessenberg: bkwd subst double: 6.83e-07(     32) |
++----------------------------------------------------------+
+| depth:   2 / level:   1                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 4.85e-04(     38) |
+|         process inner product, double: 1.14e-04(     25) |
+|      2 flop vector operations, double: 2.37e-04(    138) |
+|      6 flop vector operations, double: 3.57e-05(     13) |
+|      8 flop vector operations, double: 5.63e-04(    649) |
+|               copy operations, double: 2.36e-04(    288) |
+|          set value operations, double: 1.76e-04(    362) |
+| interpolation and restriction, double: 2.67e-03(     50) |
+|                 self coupling, double: 2.22e-03(     25) |
+|             neighbor coupling, double: 1.23e-02(     25) |
+|                      smoother, double: 8.90e-02(     75) |
+|            operator comm init, double: 3.82e-04(    700) |
+|            operator comm wait, double: 6.57e-03(    700) |
+|                    allreduces, double: 1.44e-03(     63) |
+|     smoother - pt 3, res comm, double: 4.11e-02(    300) |
+|   smoother - pt 4, solve comm, double: 4.04e-02(    300) |
+|          Hessenberg: qr update double: 3.56e-06(    222) |
+|         Hessenberg: bkwd subst double: 2.98e-06(     62) |
+|          global inner product, double: 4.85e-04(     38) |
+|         process inner product, double: 1.14e-04(     25) |
+|      2 flop vector operations, double: 2.37e-04(    138) |
+|      6 flop vector operations, double: 3.57e-05(     13) |
+|      8 flop vector operations, double: 5.63e-04(    649) |
+|               copy operations, double: 2.36e-04(    288) |
+|          set value operations, double: 1.76e-04(    362) |
+| interpolation and restriction, double: 2.67e-03(     50) |
+|                 self coupling, double: 2.22e-03(     25) |
+|             neighbor coupling, double: 1.23e-02(     25) |
+|                      smoother, double: 8.90e-02(     75) |
+|            operator comm init, double: 3.82e-04(    700) |
+|            operator comm wait, double: 6.57e-03(    700) |
+|                    allreduces, double: 1.44e-03(     63) |
+|     smoother - pt 3, res comm, double: 4.11e-02(    300) |
+|   smoother - pt 4, solve comm, double: 4.04e-02(    300) |
+|          Hessenberg: qr update double: 3.56e-06(    222) |
+|         Hessenberg: bkwd subst double: 2.98e-06(     62) |
++----------------------------------------------------------+
+| depth:   3 / level:   0                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 4.90e-04(     27) |
+|         process inner product, double: 9.97e-04(    248) |
+|      2 flop vector operations, double: 1.63e-04(    277) |
+|      6 flop vector operations, double: 1.92e-05(     25) |
+|      8 flop vector operations, double: 5.51e-04(   1566) |
+|               copy operations, double: 1.96e-05(     25) |
+|          set value operations, double: 4.27e-04(    750) |
+|                 self coupling, double: 1.19e-02(    250) |
+|             neighbor coupling, double: 5.47e-02(    250) |
+|            operator comm init, double: 8.22e-04(   1000) |
+|            operator comm wait, double: 3.14e-03(   1000) |
+|                    allreduces, double: 1.03e-02(    275) |
+|          Hessenberg: qr update double: 3.42e-05(   8058) |
+|         Hessenberg: bkwd subst double: 6.75e-06(   1591) |
+|          global inner product, double: 4.90e-04(     27) |
+|         process inner product, double: 9.97e-04(    248) |
+|      2 flop vector operations, double: 1.63e-04(    277) |
+|      6 flop vector operations, double: 1.92e-05(     25) |
+|      8 flop vector operations, double: 5.51e-04(   1566) |
+|               copy operations, double: 1.96e-05(     25) |
+|          set value operations, double: 4.27e-04(    750) |
+|                 self coupling, double: 1.19e-02(    250) |
+|             neighbor coupling, double: 5.47e-02(    250) |
+|            operator comm init, double: 8.22e-04(   1000) |
+|            operator comm wait, double: 3.14e-03(   1000) |
+|                    allreduces, double: 1.03e-02(    275) |
+|          Hessenberg: qr update double: 3.42e-05(   8058) |
+|         Hessenberg: bkwd subst double: 6.75e-06(   1591) |
++----------------------------------------------------------+
+| flop/lattice site:  2.65e+07                             |
+| flop/s/MPIprocess:  8.24e+09                             |
++----------------------------------------------------------+
+
+0 	 var 0.000000000000000 	 RMSD 0.000000000000000 < 0.000000000000000, 	 Trace: 0.222425894312491 + i0.078492393900235 
+ iters = 0 (time = 0.412138)
+rhs = first unit vector
++----------------------------------------------------------+
+coarsest iters = 6
+| approx. rel. res. after  1      iterations: 8.814661e-03 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  2      iterations: 2.674438e-04 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 11
+| approx. rel. res. after  3      iterations: 1.162471e-05 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  4      iterations: 5.014629e-07 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 11
+| approx. rel. res. after  5      iterations: 2.010997e-08 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  6      iterations: 7.432733e-10 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  7      iterations: 3.071730e-11 |
++----------------------------------------------------------+
+
++----------------------------------------------------------+
+|       FGMRES iterations: 7      coarse average: 35.43    |
+| exact relative residual: ||r||/||b|| = 3.071730e-11      |
+| elapsed wall clock time: 0.4126   seconds                |
+|        coarse grid time: 0.3976   seconds (96.4%)        |
+|        coarsest grid time: 0.0000   seconds (00.0%)        |
+|  consumed core minutes*: 2.20e-01 (solve only)           |
+|    max used mem/MPIproc: 1.05e-01 GB                     |
++----------------------------------------------------------+
+*: only correct if #MPIprocs*#threads == #CPUs
+
+
++----------------------------------------------------------+
+| solver profiling                                         |
++----------------------------------------------------------+
+| depth:   0 / level:   3                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 6.51e-05(      8) |
+|         process inner product, double: 1.28e-04(      7) |
+|      2 flop vector operations, double: 1.51e-04(     36) |
+|      6 flop vector operations, double: 7.80e-06(      1) |
+|      8 flop vector operations, double: 6.27e-04(    202) |
+|               copy operations, double: 1.58e-04(     78) |
+|          set value operations, double: 4.88e-05(    672) |
+| interpolation and restriction, double: 4.59e-03(     14) |
+|                 self coupling, double: 2.09e-03(   2919) |
+|             neighbor coupling, double: 7.43e-04(      7) |
+|                      smoother, double: 8.44e-03(     21) |
+|            operator comm init, double: 1.07e-04(    196) |
+|            operator comm wait, double: 2.20e-03(    196) |
+|                    allreduces, double: 4.91e-04(     15) |
+|     smoother - pt 3, res comm, double: 1.42e-03(    672) |
+|   smoother - pt 4, solve comm, double: 4.23e-03(    672) |
+|          Hessenberg: qr update double: 2.26e-06(    168) |
+|         Hessenberg: bkwd subst double: 8.00e-07(     35) |
+|          global inner product, double: 6.51e-05(      8) |
+|         process inner product, double: 1.28e-04(      7) |
+|      2 flop vector operations, double: 1.51e-04(     36) |
+|      6 flop vector operations, double: 7.80e-06(      1) |
+|      8 flop vector operations, double: 6.27e-04(    202) |
+|               copy operations, double: 1.58e-04(     78) |
+|          set value operations, double: 4.88e-05(    672) |
+| interpolation and restriction, double: 4.59e-03(     14) |
+|                 self coupling, double: 2.09e-03(   2919) |
+|             neighbor coupling, double: 7.43e-04(      7) |
+|                      smoother, double: 8.44e-03(     21) |
+|            operator comm init, double: 1.07e-04(    196) |
+|            operator comm wait, double: 2.20e-03(    196) |
+|                    allreduces, double: 4.91e-04(     15) |
+|     smoother - pt 3, res comm, double: 1.42e-03(    672) |
+|   smoother - pt 4, solve comm, double: 4.23e-03(    672) |
+|          Hessenberg: qr update double: 2.26e-06(    168) |
+|         Hessenberg: bkwd subst double: 8.00e-07(     35) |
++----------------------------------------------------------+
+| depth:   1 / level:   2                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 1.99e-04(     20) |
+|         process inner product, double: 1.40e-04(     13) |
+|      2 flop vector operations, double: 4.55e-04(     72) |
+|      6 flop vector operations, double: 6.12e-05(      7) |
+|      8 flop vector operations, double: 9.78e-04(    337) |
+|               copy operations, double: 4.97e-04(    150) |
+|          set value operations, double: 2.77e-04(    338) |
+| interpolation and restriction, double: 4.44e-03(     26) |
+|                 self coupling, double: 3.86e-03(     13) |
+|             neighbor coupling, double: 2.78e-02(     13) |
+|                      smoother, double: 1.69e-01(     39) |
+|            operator comm init, double: 2.74e-04(    364) |
+|            operator comm wait, double: 8.47e-03(    364) |
+|                    allreduces, double: 1.70e-03(     33) |
+|     smoother - pt 3, res comm, double: 7.05e-02(    312) |
+|   smoother - pt 4, solve comm, double: 9.04e-02(    312) |
+|          Hessenberg: qr update double: 1.63e-06(    114) |
+|         Hessenberg: bkwd subst double: 7.04e-07(     32) |
+|          global inner product, double: 1.99e-04(     20) |
+|         process inner product, double: 1.40e-04(     13) |
+|      2 flop vector operations, double: 4.55e-04(     72) |
+|      6 flop vector operations, double: 6.12e-05(      7) |
+|      8 flop vector operations, double: 9.78e-04(    337) |
+|               copy operations, double: 4.97e-04(    150) |
+|          set value operations, double: 2.77e-04(    338) |
+| interpolation and restriction, double: 4.44e-03(     26) |
+|                 self coupling, double: 3.86e-03(     13) |
+|             neighbor coupling, double: 2.78e-02(     13) |
+|                      smoother, double: 1.69e-01(     39) |
+|            operator comm init, double: 2.74e-04(    364) |
+|            operator comm wait, double: 8.47e-03(    364) |
+|                    allreduces, double: 1.70e-03(     33) |
+|     smoother - pt 3, res comm, double: 7.05e-02(    312) |
+|   smoother - pt 4, solve comm, double: 9.04e-02(    312) |
+|          Hessenberg: qr update double: 1.63e-06(    114) |
+|         Hessenberg: bkwd subst double: 7.04e-07(     32) |
++----------------------------------------------------------+
+| depth:   2 / level:   1                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 6.27e-04(     38) |
+|         process inner product, double: 1.17e-04(     25) |
+|      2 flop vector operations, double: 2.36e-04(    138) |
+|      6 flop vector operations, double: 3.73e-05(     13) |
+|      8 flop vector operations, double: 5.64e-04(    649) |
+|               copy operations, double: 2.35e-04(    288) |
+|          set value operations, double: 1.65e-04(    362) |
+| interpolation and restriction, double: 2.71e-03(     50) |
+|                 self coupling, double: 2.19e-03(     25) |
+|             neighbor coupling, double: 1.21e-02(     25) |
+|                      smoother, double: 8.88e-02(     75) |
+|            operator comm init, double: 3.80e-04(    700) |
+|            operator comm wait, double: 6.33e-03(    700) |
+|                    allreduces, double: 1.78e-03(     63) |
+|     smoother - pt 3, res comm, double: 4.11e-02(    300) |
+|   smoother - pt 4, solve comm, double: 4.05e-02(    300) |
+|          Hessenberg: qr update double: 4.04e-06(    222) |
+|         Hessenberg: bkwd subst double: 2.29e-06(     62) |
+|          global inner product, double: 6.27e-04(     38) |
+|         process inner product, double: 1.17e-04(     25) |
+|      2 flop vector operations, double: 2.36e-04(    138) |
+|      6 flop vector operations, double: 3.73e-05(     13) |
+|      8 flop vector operations, double: 5.64e-04(    649) |
+|               copy operations, double: 2.35e-04(    288) |
+|          set value operations, double: 1.65e-04(    362) |
+| interpolation and restriction, double: 2.71e-03(     50) |
+|                 self coupling, double: 2.19e-03(     25) |
+|             neighbor coupling, double: 1.21e-02(     25) |
+|                      smoother, double: 8.88e-02(     75) |
+|            operator comm init, double: 3.80e-04(    700) |
+|            operator comm wait, double: 6.33e-03(    700) |
+|                    allreduces, double: 1.78e-03(     63) |
+|     smoother - pt 3, res comm, double: 4.11e-02(    300) |
+|   smoother - pt 4, solve comm, double: 4.05e-02(    300) |
+|          Hessenberg: qr update double: 4.04e-06(    222) |
+|         Hessenberg: bkwd subst double: 2.29e-06(     62) |
++----------------------------------------------------------+
+| depth:   3 / level:   0                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 5.57e-04(     27) |
+|         process inner product, double: 1.01e-03(    248) |
+|      2 flop vector operations, double: 1.67e-04(    277) |
+|      6 flop vector operations, double: 1.84e-05(     25) |
+|      8 flop vector operations, double: 5.55e-04(   1566) |
+|               copy operations, double: 1.95e-05(     25) |
+|          set value operations, double: 4.28e-04(    750) |
+|                 self coupling, double: 1.19e-02(    250) |
+|             neighbor coupling, double: 5.50e-02(    250) |
+|            operator comm init, double: 8.32e-04(   1000) |
+|            operator comm wait, double: 3.21e-03(   1000) |
+|                    allreduces, double: 1.01e-02(    275) |
+|          Hessenberg: qr update double: 3.43e-05(   8058) |
+|         Hessenberg: bkwd subst double: 6.89e-06(   1591) |
+|          global inner product, double: 5.57e-04(     27) |
+|         process inner product, double: 1.01e-03(    248) |
+|      2 flop vector operations, double: 1.67e-04(    277) |
+|      6 flop vector operations, double: 1.84e-05(     25) |
+|      8 flop vector operations, double: 5.55e-04(   1566) |
+|               copy operations, double: 1.95e-05(     25) |
+|          set value operations, double: 4.28e-04(    750) |
+|                 self coupling, double: 1.19e-02(    250) |
+|             neighbor coupling, double: 5.50e-02(    250) |
+|            operator comm init, double: 8.32e-04(   1000) |
+|            operator comm wait, double: 3.21e-03(   1000) |
+|                    allreduces, double: 1.01e-02(    275) |
+|          Hessenberg: qr update double: 3.43e-05(   8058) |
+|         Hessenberg: bkwd subst double: 6.89e-06(   1591) |
++----------------------------------------------------------+
+| flop/lattice site:  2.65e+07                             |
+| flop/s/MPIprocess:  8.22e+09                             |
++----------------------------------------------------------+
+
+1 	 var 0.000000000000000 	 RMSD 0.000000000000000 < 0.000000000000000, 	 Trace: 0.222425894312491 + i0.078492393900235 
+ iters = 1 (time = 0.413193)
+rhs = first unit vector
++----------------------------------------------------------+
+coarsest iters = 6
+| approx. rel. res. after  1      iterations: 8.814661e-03 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  2      iterations: 2.674438e-04 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 11
+| approx. rel. res. after  3      iterations: 1.162471e-05 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  4      iterations: 5.014629e-07 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 11
+| approx. rel. res. after  5      iterations: 2.010997e-08 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  6      iterations: 7.432733e-10 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  7      iterations: 3.071730e-11 |
++----------------------------------------------------------+
+
++----------------------------------------------------------+
+|       FGMRES iterations: 7      coarse average: 35.43    |
+| exact relative residual: ||r||/||b|| = 3.071730e-11      |
+| elapsed wall clock time: 0.4113   seconds                |
+|        coarse grid time: 0.3992   seconds (97.0%)        |
+|        coarsest grid time: 0.0000   seconds (00.0%)        |
+|  consumed core minutes*: 2.19e-01 (solve only)           |
+|    max used mem/MPIproc: 1.05e-01 GB                     |
++----------------------------------------------------------+
+*: only correct if #MPIprocs*#threads == #CPUs
+
+
++----------------------------------------------------------+
+| solver profiling                                         |
++----------------------------------------------------------+
+| depth:   0 / level:   3                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 6.70e-05(      8) |
+|         process inner product, double: 1.29e-04(      7) |
+|      2 flop vector operations, double: 1.45e-04(     36) |
+|      6 flop vector operations, double: 8.58e-06(      1) |
+|      8 flop vector operations, double: 6.42e-04(    202) |
+|               copy operations, double: 1.61e-04(     78) |
+|          set value operations, double: 5.05e-05(    672) |
+| interpolation and restriction, double: 1.96e-03(     14) |
+|                 self coupling, double: 2.11e-03(   2919) |
+|             neighbor coupling, double: 6.91e-04(      7) |
+|                      smoother, double: 8.16e-03(     21) |
+|            operator comm init, double: 1.01e-04(    196) |
+|            operator comm wait, double: 1.82e-03(    196) |
+|                    allreduces, double: 5.64e-04(     15) |
+|     smoother - pt 3, res comm, double: 1.45e-03(    672) |
+|   smoother - pt 4, solve comm, double: 4.25e-03(    672) |
+|          Hessenberg: qr update double: 1.83e-06(    168) |
+|         Hessenberg: bkwd subst double: 1.05e-06(     35) |
+|          global inner product, double: 6.70e-05(      8) |
+|         process inner product, double: 1.29e-04(      7) |
+|      2 flop vector operations, double: 1.45e-04(     36) |
+|      6 flop vector operations, double: 8.58e-06(      1) |
+|      8 flop vector operations, double: 6.42e-04(    202) |
+|               copy operations, double: 1.61e-04(     78) |
+|          set value operations, double: 5.05e-05(    672) |
+| interpolation and restriction, double: 1.96e-03(     14) |
+|                 self coupling, double: 2.11e-03(   2919) |
+|             neighbor coupling, double: 6.91e-04(      7) |
+|                      smoother, double: 8.16e-03(     21) |
+|            operator comm init, double: 1.01e-04(    196) |
+|            operator comm wait, double: 1.82e-03(    196) |
+|                    allreduces, double: 5.64e-04(     15) |
+|     smoother - pt 3, res comm, double: 1.45e-03(    672) |
+|   smoother - pt 4, solve comm, double: 4.25e-03(    672) |
+|          Hessenberg: qr update double: 1.83e-06(    168) |
+|         Hessenberg: bkwd subst double: 1.05e-06(     35) |
++----------------------------------------------------------+
+| depth:   1 / level:   2                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 1.62e-04(     20) |
+|         process inner product, double: 1.31e-04(     13) |
+|      2 flop vector operations, double: 4.47e-04(     72) |
+|      6 flop vector operations, double: 6.04e-05(      7) |
+|      8 flop vector operations, double: 9.89e-04(    337) |
+|               copy operations, double: 4.99e-04(    150) |
+|          set value operations, double: 2.83e-04(    338) |
+| interpolation and restriction, double: 4.46e-03(     26) |
+|                 self coupling, double: 3.89e-03(     13) |
+|             neighbor coupling, double: 2.72e-02(     13) |
+|                      smoother, double: 1.73e-01(     39) |
+|            operator comm init, double: 2.95e-04(    364) |
+|            operator comm wait, double: 7.77e-03(    364) |
+|                    allreduces, double: 1.48e-03(     33) |
+|     smoother - pt 3, res comm, double: 6.77e-02(    312) |
+|   smoother - pt 4, solve comm, double: 9.74e-02(    312) |
+|          Hessenberg: qr update double: 1.41e-06(    114) |
+|         Hessenberg: bkwd subst double: 6.32e-07(     32) |
+|          global inner product, double: 1.62e-04(     20) |
+|         process inner product, double: 1.31e-04(     13) |
+|      2 flop vector operations, double: 4.47e-04(     72) |
+|      6 flop vector operations, double: 6.04e-05(      7) |
+|      8 flop vector operations, double: 9.89e-04(    337) |
+|               copy operations, double: 4.99e-04(    150) |
+|          set value operations, double: 2.83e-04(    338) |
+| interpolation and restriction, double: 4.46e-03(     26) |
+|                 self coupling, double: 3.89e-03(     13) |
+|             neighbor coupling, double: 2.72e-02(     13) |
+|                      smoother, double: 1.73e-01(     39) |
+|            operator comm init, double: 2.95e-04(    364) |
+|            operator comm wait, double: 7.77e-03(    364) |
+|                    allreduces, double: 1.48e-03(     33) |
+|     smoother - pt 3, res comm, double: 6.77e-02(    312) |
+|   smoother - pt 4, solve comm, double: 9.74e-02(    312) |
+|          Hessenberg: qr update double: 1.41e-06(    114) |
+|         Hessenberg: bkwd subst double: 6.32e-07(     32) |
++----------------------------------------------------------+
+| depth:   2 / level:   1                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 4.39e-04(     38) |
+|         process inner product, double: 1.10e-04(     25) |
+|      2 flop vector operations, double: 2.35e-04(    138) |
+|      6 flop vector operations, double: 3.71e-05(     13) |
+|      8 flop vector operations, double: 5.66e-04(    649) |
+|               copy operations, double: 2.39e-04(    288) |
+|          set value operations, double: 1.67e-04(    362) |
+| interpolation and restriction, double: 2.66e-03(     50) |
+|                 self coupling, double: 2.22e-03(     25) |
+|             neighbor coupling, double: 1.20e-02(     25) |
+|                      smoother, double: 8.86e-02(     75) |
+|            operator comm init, double: 3.85e-04(    700) |
+|            operator comm wait, double: 5.80e-03(    700) |
+|                    allreduces, double: 1.72e-03(     63) |
+|     smoother - pt 3, res comm, double: 4.12e-02(    300) |
+|   smoother - pt 4, solve comm, double: 4.05e-02(    300) |
+|          Hessenberg: qr update double: 3.96e-06(    222) |
+|         Hessenberg: bkwd subst double: 3.09e-06(     62) |
+|          global inner product, double: 4.39e-04(     38) |
+|         process inner product, double: 1.10e-04(     25) |
+|      2 flop vector operations, double: 2.35e-04(    138) |
+|      6 flop vector operations, double: 3.71e-05(     13) |
+|      8 flop vector operations, double: 5.66e-04(    649) |
+|               copy operations, double: 2.39e-04(    288) |
+|          set value operations, double: 1.67e-04(    362) |
+| interpolation and restriction, double: 2.66e-03(     50) |
+|                 self coupling, double: 2.22e-03(     25) |
+|             neighbor coupling, double: 1.20e-02(     25) |
+|                      smoother, double: 8.86e-02(     75) |
+|            operator comm init, double: 3.85e-04(    700) |
+|            operator comm wait, double: 5.80e-03(    700) |
+|                    allreduces, double: 1.72e-03(     63) |
+|     smoother - pt 3, res comm, double: 4.12e-02(    300) |
+|   smoother - pt 4, solve comm, double: 4.05e-02(    300) |
+|          Hessenberg: qr update double: 3.96e-06(    222) |
+|         Hessenberg: bkwd subst double: 3.09e-06(     62) |
++----------------------------------------------------------+
+| depth:   3 / level:   0                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 5.64e-04(     27) |
+|         process inner product, double: 9.99e-04(    248) |
+|      2 flop vector operations, double: 1.60e-04(    277) |
+|      6 flop vector operations, double: 1.92e-05(     25) |
+|      8 flop vector operations, double: 5.51e-04(   1566) |
+|               copy operations, double: 1.84e-05(     25) |
+|          set value operations, double: 4.29e-04(    750) |
+|                 self coupling, double: 1.18e-02(    250) |
+|             neighbor coupling, double: 5.46e-02(    250) |
+|            operator comm init, double: 8.33e-04(   1000) |
+|            operator comm wait, double: 3.15e-03(   1000) |
+|                    allreduces, double: 9.31e-03(    275) |
+|          Hessenberg: qr update double: 3.49e-05(   8058) |
+|         Hessenberg: bkwd subst double: 7.07e-06(   1591) |
+|          global inner product, double: 5.64e-04(     27) |
+|         process inner product, double: 9.99e-04(    248) |
+|      2 flop vector operations, double: 1.60e-04(    277) |
+|      6 flop vector operations, double: 1.92e-05(     25) |
+|      8 flop vector operations, double: 5.51e-04(   1566) |
+|               copy operations, double: 1.84e-05(     25) |
+|          set value operations, double: 4.29e-04(    750) |
+|                 self coupling, double: 1.18e-02(    250) |
+|             neighbor coupling, double: 5.46e-02(    250) |
+|            operator comm init, double: 8.33e-04(   1000) |
+|            operator comm wait, double: 3.15e-03(   1000) |
+|                    allreduces, double: 9.31e-03(    275) |
+|          Hessenberg: qr update double: 3.49e-05(   8058) |
+|         Hessenberg: bkwd subst double: 7.07e-06(   1591) |
++----------------------------------------------------------+
+| flop/lattice site:  2.65e+07                             |
+| flop/s/MPIprocess:  8.24e+09                             |
++----------------------------------------------------------+
+
+2 	 var 0.000000000000000 	 RMSD 0.000000000000000 < 0.000000000000000, 	 Trace: 0.222425894312491 + i0.078492393900235 
+ iters = 2 (time = 0.411838)
+rhs = first unit vector
++----------------------------------------------------------+
+coarsest iters = 6
+| approx. rel. res. after  1      iterations: 8.814661e-03 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  2      iterations: 2.674438e-04 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 11
+| approx. rel. res. after  3      iterations: 1.162471e-05 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  4      iterations: 5.014629e-07 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 11
+| approx. rel. res. after  5      iterations: 2.010997e-08 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  6      iterations: 7.432733e-10 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  7      iterations: 3.071730e-11 |
++----------------------------------------------------------+
+
++----------------------------------------------------------+
+|       FGMRES iterations: 7      coarse average: 35.43    |
+| exact relative residual: ||r||/||b|| = 3.071730e-11      |
+| elapsed wall clock time: 0.4047   seconds                |
+|        coarse grid time: 0.3928   seconds (97.0%)        |
+|        coarsest grid time: 0.0000   seconds (00.0%)        |
+|  consumed core minutes*: 2.16e-01 (solve only)           |
+|    max used mem/MPIproc: 1.05e-01 GB                     |
++----------------------------------------------------------+
+*: only correct if #MPIprocs*#threads == #CPUs
+
+
++----------------------------------------------------------+
+| solver profiling                                         |
++----------------------------------------------------------+
+| depth:   0 / level:   3                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 6.68e-05(      8) |
+|         process inner product, double: 1.33e-04(      7) |
+|      2 flop vector operations, double: 1.47e-04(     36) |
+|      6 flop vector operations, double: 7.15e-06(      1) |
+|      8 flop vector operations, double: 6.44e-04(    202) |
+|               copy operations, double: 1.58e-04(     78) |
+|          set value operations, double: 5.08e-05(    672) |
+| interpolation and restriction, double: 2.02e-03(     14) |
+|                 self coupling, double: 2.10e-03(   2919) |
+|             neighbor coupling, double: 7.12e-04(      7) |
+|                      smoother, double: 8.03e-03(     21) |
+|            operator comm init, double: 9.61e-05(    196) |
+|            operator comm wait, double: 1.75e-03(    196) |
+|                    allreduces, double: 4.24e-04(     15) |
+|     smoother - pt 3, res comm, double: 1.45e-03(    672) |
+|   smoother - pt 4, solve comm, double: 4.22e-03(    672) |
+|          Hessenberg: qr update double: 2.07e-06(    168) |
+|         Hessenberg: bkwd subst double: 9.51e-07(     35) |
+|          global inner product, double: 6.68e-05(      8) |
+|         process inner product, double: 1.33e-04(      7) |
+|      2 flop vector operations, double: 1.47e-04(     36) |
+|      6 flop vector operations, double: 7.15e-06(      1) |
+|      8 flop vector operations, double: 6.44e-04(    202) |
+|               copy operations, double: 1.58e-04(     78) |
+|          set value operations, double: 5.08e-05(    672) |
+| interpolation and restriction, double: 2.02e-03(     14) |
+|                 self coupling, double: 2.10e-03(   2919) |
+|             neighbor coupling, double: 7.12e-04(      7) |
+|                      smoother, double: 8.03e-03(     21) |
+|            operator comm init, double: 9.61e-05(    196) |
+|            operator comm wait, double: 1.75e-03(    196) |
+|                    allreduces, double: 4.24e-04(     15) |
+|     smoother - pt 3, res comm, double: 1.45e-03(    672) |
+|   smoother - pt 4, solve comm, double: 4.22e-03(    672) |
+|          Hessenberg: qr update double: 2.07e-06(    168) |
+|         Hessenberg: bkwd subst double: 9.51e-07(     35) |
++----------------------------------------------------------+
+| depth:   1 / level:   2                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 1.71e-04(     20) |
+|         process inner product, double: 1.30e-04(     13) |
+|      2 flop vector operations, double: 4.54e-04(     72) |
+|      6 flop vector operations, double: 6.10e-05(      7) |
+|      8 flop vector operations, double: 9.78e-04(    337) |
+|               copy operations, double: 5.11e-04(    150) |
+|          set value operations, double: 2.87e-04(    338) |
+| interpolation and restriction, double: 4.41e-03(     26) |
+|                 self coupling, double: 3.92e-03(     13) |
+|             neighbor coupling, double: 2.70e-02(     13) |
+|                      smoother, double: 1.66e-01(     39) |
+|            operator comm init, double: 2.72e-04(    364) |
+|            operator comm wait, double: 7.65e-03(    364) |
+|                    allreduces, double: 1.71e-03(     33) |
+|     smoother - pt 3, res comm, double: 6.78e-02(    312) |
+|   smoother - pt 4, solve comm, double: 9.04e-02(    312) |
+|          Hessenberg: qr update double: 1.60e-06(    114) |
+|         Hessenberg: bkwd subst double: 1.04e-06(     32) |
+|          global inner product, double: 1.71e-04(     20) |
+|         process inner product, double: 1.30e-04(     13) |
+|      2 flop vector operations, double: 4.54e-04(     72) |
+|      6 flop vector operations, double: 6.10e-05(      7) |
+|      8 flop vector operations, double: 9.78e-04(    337) |
+|               copy operations, double: 5.11e-04(    150) |
+|          set value operations, double: 2.87e-04(    338) |
+| interpolation and restriction, double: 4.41e-03(     26) |
+|                 self coupling, double: 3.92e-03(     13) |
+|             neighbor coupling, double: 2.70e-02(     13) |
+|                      smoother, double: 1.66e-01(     39) |
+|            operator comm init, double: 2.72e-04(    364) |
+|            operator comm wait, double: 7.65e-03(    364) |
+|                    allreduces, double: 1.71e-03(     33) |
+|     smoother - pt 3, res comm, double: 6.78e-02(    312) |
+|   smoother - pt 4, solve comm, double: 9.04e-02(    312) |
+|          Hessenberg: qr update double: 1.60e-06(    114) |
+|         Hessenberg: bkwd subst double: 1.04e-06(     32) |
++----------------------------------------------------------+
+| depth:   2 / level:   1                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 4.41e-04(     38) |
+|         process inner product, double: 1.12e-04(     25) |
+|      2 flop vector operations, double: 2.38e-04(    138) |
+|      6 flop vector operations, double: 3.77e-05(     13) |
+|      8 flop vector operations, double: 5.73e-04(    649) |
+|               copy operations, double: 2.39e-04(    288) |
+|          set value operations, double: 1.68e-04(    362) |
+| interpolation and restriction, double: 2.72e-03(     50) |
+|                 self coupling, double: 2.20e-03(     25) |
+|             neighbor coupling, double: 1.21e-02(     25) |
+|                      smoother, double: 8.86e-02(     75) |
+|            operator comm init, double: 3.80e-04(    700) |
+|            operator comm wait, double: 5.99e-03(    700) |
+|                    allreduces, double: 1.45e-03(     63) |
+|     smoother - pt 3, res comm, double: 4.11e-02(    300) |
+|   smoother - pt 4, solve comm, double: 4.04e-02(    300) |
+|          Hessenberg: qr update double: 3.32e-06(    222) |
+|         Hessenberg: bkwd subst double: 3.25e-06(     62) |
+|          global inner product, double: 4.41e-04(     38) |
+|         process inner product, double: 1.12e-04(     25) |
+|      2 flop vector operations, double: 2.38e-04(    138) |
+|      6 flop vector operations, double: 3.77e-05(     13) |
+|      8 flop vector operations, double: 5.73e-04(    649) |
+|               copy operations, double: 2.39e-04(    288) |
+|          set value operations, double: 1.68e-04(    362) |
+| interpolation and restriction, double: 2.72e-03(     50) |
+|                 self coupling, double: 2.20e-03(     25) |
+|             neighbor coupling, double: 1.21e-02(     25) |
+|                      smoother, double: 8.86e-02(     75) |
+|            operator comm init, double: 3.80e-04(    700) |
+|            operator comm wait, double: 5.99e-03(    700) |
+|                    allreduces, double: 1.45e-03(     63) |
+|     smoother - pt 3, res comm, double: 4.11e-02(    300) |
+|   smoother - pt 4, solve comm, double: 4.04e-02(    300) |
+|          Hessenberg: qr update double: 3.32e-06(    222) |
+|         Hessenberg: bkwd subst double: 3.25e-06(     62) |
++----------------------------------------------------------+
+| depth:   3 / level:   0                time    ( count ) |
++----------------------------------------------------------+
+|          global inner product, double: 4.73e-04(     27) |
+|         process inner product, double: 1.00e-03(    248) |
+|      2 flop vector operations, double: 1.74e-04(    277) |
+|      6 flop vector operations, double: 1.93e-05(     25) |
+|      8 flop vector operations, double: 5.55e-04(   1566) |
+|               copy operations, double: 1.99e-05(     25) |
+|          set value operations, double: 4.32e-04(    750) |
+|                 self coupling, double: 1.19e-02(    250) |
+|             neighbor coupling, double: 5.51e-02(    250) |
+|            operator comm init, double: 8.12e-04(   1000) |
+|            operator comm wait, double: 3.13e-03(   1000) |
+|                    allreduces, double: 9.30e-03(    275) |
+|          Hessenberg: qr update double: 3.54e-05(   8058) |
+|         Hessenberg: bkwd subst double: 7.01e-06(   1591) |
+|          global inner product, double: 4.73e-04(     27) |
+|         process inner product, double: 1.00e-03(    248) |
+|      2 flop vector operations, double: 1.74e-04(    277) |
+|      6 flop vector operations, double: 1.93e-05(     25) |
+|      8 flop vector operations, double: 5.55e-04(   1566) |
+|               copy operations, double: 1.99e-05(     25) |
+|          set value operations, double: 4.32e-04(    750) |
+|                 self coupling, double: 1.19e-02(    250) |
+|             neighbor coupling, double: 5.51e-02(    250) |
+|            operator comm init, double: 8.12e-04(   1000) |
+|            operator comm wait, double: 3.13e-03(   1000) |
+|                    allreduces, double: 9.30e-03(    275) |
+|          Hessenberg: qr update double: 3.54e-05(   8058) |
+|         Hessenberg: bkwd subst double: 7.01e-06(   1591) |
++----------------------------------------------------------+
+| flop/lattice site:  2.65e+07                             |
+| flop/s/MPIprocess:  8.38e+09                             |
++----------------------------------------------------------+
+
+3 	 var 0.000000000000000 	 RMSD 0.000000000000000 < 0.000000000000000, 	 Trace: 0.222425894312491 + i0.078492393900235 
+ iters = 3 (time = 0.405314)
+rhs = first unit vector
++----------------------------------------------------------+
+coarsest iters = 6
+| approx. rel. res. after  1      iterations: 8.814661e-03 |
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+coarsest iters = 10
+| approx. rel. res. after  2      iterations: 2.674438e-04 |
+coarsest iters = 10

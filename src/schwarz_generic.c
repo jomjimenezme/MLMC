@@ -1,0 +1,2275 @@
+/*
+ * Copyright (C) 2016, Matthias Rottmann, Artur Strebel, Simon Heybrock, Simone Bacchio, Bjoern Leder.
+ * 
+ * This file is part of the DDalphaAMG solver library.
+ * 
+ * The DDalphaAMG solver library is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * The DDalphaAMG solver library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with the DDalphaAMG solver library. If not, see http://www.gnu.org/licenses/.
+ * 
+ */
+
+#include "main.h"
+
+void smoother_double_def( level_struct *l ) {
+  
+  if ( g.method >= 0 )
+    schwarz_double_def( &(l->s_double), &(g.op_double), l );
+  
+  l->p_double.op = &(l->s_double.op);
+  l->p_double.v_start = 0;
+  l->p_double.v_end = l->inner_vector_size;
+#ifdef BLOCK_JACOBI
+  if ( l->level==0 ) {
+    l->p_double.block_jacobi_double.local_p.op = &(l->s_double.op);
+    l->p_double.block_jacobi_double.local_p.v_start = 0;
+    l->p_double.block_jacobi_double.local_p.v_end = l->inner_vector_size;
+  }
+#endif
+  if ( g.method == 6 ) {
+    l->p_double.eval_operator = (l->depth > 0)?g5D_apply_coarse_operator_double:g5D_plus_clover_double;
+  } else {
+    l->p_double.eval_operator = (l->depth > 0)?apply_coarse_operator_double:d_plus_clover_double;
+  }
+}
+
+
+void smoother_double_free( level_struct *l ) {
+  
+  if ( g.method >= 0 )
+    schwarz_double_free( &(l->s_double), l );
+}
+
+
+void schwarz_double_init( schwarz_double_struct *s, level_struct *l ) {
+
+  operator_double_init( &(s->op) );
+  
+  s->index[T] = NULL;
+  s->oe_index[T] = NULL;
+  s->block = NULL;
+  s->buf1 = NULL;
+  s->buf2 = NULL;
+  s->buf3 = NULL;
+  s->buf4 = NULL;
+  s->buf5 = NULL;
+  l->sbuf_double[0] = NULL;
+  s->oe_buf[0] = NULL;
+  s->oe_buf[1] = NULL;
+  s->oe_buf[2] = NULL;
+  s->oe_buf[3] = NULL;
+  s->local_minres_buffer[0] = NULL;
+  s->local_minres_buffer[1] = NULL;
+  s->local_minres_buffer[2] = NULL;
+  s->block_list = NULL;
+  s->block_list_length = NULL;
+  s->num_colors = 0;
+}
+
+
+void schwarz_double_alloc( schwarz_double_struct *s, level_struct *l ) {
+  
+  int i, j, n, mu, nu, *bl = l->block_lattice;
+  
+  if ( g.method == 4 ) {
+    fgmres_double_struct_alloc( l->block_iter, 1, (l->depth==0)?l->inner_vector_size:l->vector_size,
+                                   EPS_double, _COARSE_GMRES, _NOTHING, NULL,
+                                   (l->depth==0)?(g.odd_even?apply_schur_complement_double:d_plus_clover_double):
+                                   (g.odd_even?coarse_apply_schur_complement_double:apply_coarse_operator_double),
+                                   &(l->sp_double), l );
+  } else if ( g.method == 5 ) {
+    fgmres_double_struct_alloc( 5, 1, (l->depth==0)?l->inner_vector_size:l->vector_size,
+                                   EPS_double, _COARSE_GMRES, _NOTHING, NULL,
+                                   (l->depth==0)?(g.odd_even?apply_schur_complement_double:d_plus_clover_double):
+                                   (g.odd_even?coarse_apply_schur_complement_double:apply_coarse_operator_double),
+                                   &(l->sp_double), l );
+  } else if ( g.method == 6 ) {
+    fgmres_double_struct_alloc( l->block_iter, 1, (l->depth==0)?l->inner_vector_size:l->vector_size,
+                                   EPS_double, _COARSE_GMRES, _NOTHING, NULL,
+                                   (l->depth==0)?(g.odd_even?g5D_apply_schur_complement_double:g5D_plus_clover_double):
+                                   (g.odd_even?g5D_coarse_apply_schur_complement_double:g5D_apply_coarse_operator_double),
+                                   &(l->sp_double), l );
+  }
+  
+  operator_double_alloc( &(s->op), _SCHWARZ, l );
+  if ( l->level > 0 && l->depth > 0 ) l->p_double.op = &(s->op);
+  
+  s->dir_length[T] = (bl[T]-1)*bl[Z]*bl[Y]*bl[X];
+  s->dir_length[Z] = bl[T]*(bl[Z]-1)*bl[Y]*bl[X];
+  s->dir_length[Y] = bl[T]*bl[Z]*(bl[Y]-1)*bl[X];
+  s->dir_length[X] = bl[T]*bl[Z]*bl[Y]*(bl[X]-1);
+  
+  MALLOC( s->index[T], int, MAX(1,s->dir_length[T]+s->dir_length[Z]+s->dir_length[Y]+s->dir_length[X]) );
+  s->index[Z] = s->index[T]+s->dir_length[T];
+  s->index[Y] = s->index[Z]+s->dir_length[Z];
+  s->index[X] = s->index[Y]+s->dir_length[Y];
+  
+  if ( l->depth == 0 && g.odd_even ) {
+    MALLOC( s->oe_index[T], int, MAX(1,s->dir_length[T]+s->dir_length[Z]+s->dir_length[Y]+s->dir_length[X]) );
+    s->oe_index[Z] = s->oe_index[T]+s->dir_length[T];
+    s->oe_index[Y] = s->oe_index[Z]+s->dir_length[Z];
+    s->oe_index[X] = s->oe_index[Y]+s->dir_length[Y];
+  }
+  
+  s->num_blocks = 1;
+  s->num_block_sites = 1;
+  for ( mu=0; mu<4; mu++ ) {
+    s->num_block_sites *= bl[mu];
+    s->num_blocks *= l->local_lattice[mu]/bl[mu];
+  }
+  s->block_vector_size = s->num_block_sites*l->num_lattice_site_var;
+ 
+  if ( g.method == 3 && g.num_processes < 16 ) {
+    g.method = 2;
+    printf0("not enough cores to support 16 color schwarz, switching to red black schwarz as smoother\n");  
+  }
+
+  if ( g.method == 3 ) {
+    MALLOC( s->block_list, int*, 16 );
+    s->block_list[0] = NULL;
+    MALLOC( s->block_list[0], int, s->num_blocks );
+    j = s->num_blocks/16;
+    for ( i=1; i<16; i++ )
+      s->block_list[i] = s->block_list[0]+i*j;
+  } else if ( g.method == 2 ) {
+    MALLOC( s->block_list_length, int, 8 );
+    MALLOC( s->block_list, int*, 8 );
+    for ( i=0; i<8; i++ ) {
+      s->block_list[i] = NULL;
+      MALLOC( s->block_list[i], int, s->num_blocks );
+    }
+  }
+  
+  MALLOC( s->block, block_struct, s->num_blocks );
+
+  int svs = l->schwarz_vector_size, vs = (l->depth==0)?l->inner_vector_size:l->vector_size;
+
+#ifdef HAVE_TM1p1
+  svs *= 2;
+  vs *= 2;
+#endif
+
+  if ( l->depth == 0 ) {
+    MALLOC( s->oe_buf[0], complex_double, 4*vs );
+    s->oe_buf[1] = s->oe_buf[0] + vs;
+    s->oe_buf[2] = s->oe_buf[1] + vs;
+    s->oe_buf[3] = s->oe_buf[2] + vs;
+  }
+  
+  n = 0;
+  for ( mu=0; mu<4; mu++ ) {
+    i = 1;
+    for ( nu=0; nu<4; nu++ ) {
+      if ( mu != nu ) {
+        i *= bl[nu];
+      }
+    }
+    s->block_boundary_length[2*mu] = n;
+    s->block_boundary_length[2*mu+1] = n+2*i;
+    n += 4*i;
+  }
+  s->block_boundary_length[8] = n;
+  
+  for ( i=0; i<s->num_blocks; i++ ) {
+    s->block[i].bt = NULL;
+    MALLOC( s->block[i].bt, int, n );
+  }
+
+  MALLOC( s->buf1, complex_double, vs+3*svs );
+  s->buf2 = s->buf1 + vs;
+  s->buf3 = s->buf2 + svs;
+  s->buf4 = s->buf3 + svs;
+    
+  if ( g.method == 1 )
+    MALLOC( s->buf5, complex_double, svs );
+  
+  MALLOC( l->sbuf_double[0], complex_double, 2*vs );
+  l->sbuf_double[1] = l->sbuf_double[0] + vs;
+
+  // these buffers are introduced to make local_minres_double thread-safe
+  MALLOC( s->local_minres_buffer[0], complex_double, svs );
+  MALLOC( s->local_minres_buffer[1], complex_double, svs );
+  MALLOC( s->local_minres_buffer[2], complex_double, svs );
+  
+#ifdef OPTIMIZED_NEIGHBOR_COUPLING_double
+  if ( l->depth == 0 ) {
+    MALLOC_HUGEPAGES( s->op.D_vectorized, double, 2*4*(2*l->vector_size-l->inner_vector_size), 4*SIMD_LENGTH_double );
+    MALLOC_HUGEPAGES( s->op.D_transformed_vectorized, double, 2*4*(2*l->vector_size-l->inner_vector_size), 4*SIMD_LENGTH_double );
+  }
+#endif
+#ifdef OPTIMIZED_SELF_COUPLING_double
+  if ( l->depth == 0 ) {
+    MALLOC_HUGEPAGES( s->op.clover_vectorized, double, 2*6*l->inner_vector_size, 4*SIMD_LENGTH_double );
+#ifdef HAVE_TM1p1
+    MALLOC_HUGEPAGES( s->op.clover_doublet_vectorized, double, 4*2*6*l->inner_vector_size, 4*SIMD_LENGTH_double );
+#endif
+  }
+#endif
+}
+
+
+void schwarz_double_free( schwarz_double_struct *s, level_struct *l ) {
+  
+  int i, n, mu, nu, *bl = l->block_lattice;
+  
+  if ( g.method == 4 || g.method == 5 || g.method == 6 )
+    fgmres_double_struct_free( &(l->sp_double), l );
+  
+  FREE( s->index[T], int, MAX(1,s->dir_length[T]+s->dir_length[Z]+s->dir_length[Y]+s->dir_length[X]) );
+  s->index[Z] = NULL;
+  s->index[Y] = NULL;
+  s->index[X] = NULL;
+  
+  if ( l->depth == 0 && g.odd_even ) {
+    FREE( s->oe_index[T], int, MAX(1,s->dir_length[T]+s->dir_length[Z]+s->dir_length[Y]+s->dir_length[X]) );
+    s->oe_index[Z] = NULL;
+    s->oe_index[Y] = NULL;
+    s->oe_index[X] = NULL;
+  }
+  
+  n = 0;
+  for ( mu=0; mu<4; mu++ ) {
+    i = 1;
+    for ( nu=0; nu<4; nu++ ) {
+      if ( mu != nu ) {
+        i *= bl[nu];
+      }
+    }
+    n += 4*i;
+  }
+  
+  for ( i=0; i<s->num_blocks; i++ ) {
+    FREE( s->block[i].bt, int, n );
+  }
+  
+  if ( g.method == 3 ) {
+    FREE( s->block_list[0], int, s->num_blocks );
+    FREE( s->block_list, int*, 16 );
+  } else if ( g.method == 2 ) {
+    FREE( s->block_list_length, int, 8 );
+    for ( i=0; i<8; i++ )
+      FREE( s->block_list[i], int, s->num_blocks );
+    FREE( s->block_list, int*, 8 );
+  }
+  
+  FREE( s->block, block_struct, s->num_blocks );
+
+  int svs = l->schwarz_vector_size, vs = (l->depth==0)?l->inner_vector_size:l->vector_size;
+
+#ifdef HAVE_TM1p1
+  svs *= 2;
+  vs *= 2;
+#endif
+ if ( l->depth == 0 ) {
+    s->oe_buf[1] = NULL;
+    s->oe_buf[2] = NULL;
+    s->oe_buf[3] = NULL;
+    FREE( s->oe_buf[0], complex_double, 4*vs );
+    s->oe_buf[0] = NULL;
+  }
+  
+ 
+  FREE( s->buf1, complex_double, vs+3*svs );
+  s->buf2 = NULL; s->buf3 = NULL;
+  s->buf4 = NULL;
+  
+  if ( g.method == 1 )
+    FREE( s->buf5, complex_double, svs );
+  
+  operator_double_free( &(s->op), _SCHWARZ, l );
+  
+  FREE( l->sbuf_double[0], complex_double, 2*vs );
+  l->sbuf_double[1] = NULL;
+
+  FREE( s->local_minres_buffer[0], complex_double, svs );
+  FREE( s->local_minres_buffer[1], complex_double, svs );
+  FREE( s->local_minres_buffer[2], complex_double, svs );
+  s->local_minres_buffer[0] = NULL;
+  s->local_minres_buffer[1] = NULL;
+  s->local_minres_buffer[2] = NULL;
+  
+#ifdef OPTIMIZED_NEIGHBOR_COUPLING_double
+  if ( l->depth == 0 ) {
+    FREE_HUGEPAGES( s->op.D_vectorized, double, 2*4*(2*l->vector_size-l->inner_vector_size) );
+    FREE_HUGEPAGES( s->op.D_transformed_vectorized, double, 2*4*(2*l->vector_size-l->inner_vector_size) );
+  }
+#endif
+#ifdef OPTIMIZED_SELF_COUPLING_double
+  if ( l->depth == 0 ) {
+    FREE_HUGEPAGES( s->op.clover_vectorized, double, 2*6*l->inner_vector_size );
+#ifdef HAVE_TM1p1
+    FREE_HUGEPAGES( s->op.clover_doublet_vectorized, double, 4*2*6*l->inner_vector_size );  
+#endif
+  }
+#endif
+}
+
+
+void schwarz_layout_double_define( schwarz_double_struct *s, level_struct *l ) {
+
+  int a0, b0, c0, d0, a1, b1, c1, d1, block_split[4], block_size[4], agg_split[4], 
+      i, j, k, mu, index, x, y, z, t, ls[4], le[4], l_st[4], l_en[4], *dt = s->op.table_dim,
+      *dt_mod = s->op.table_mod_dim, *it = s->op.index_table, *count[4];
+
+  // Define coloring    
+  if ( g.method == 1 )        // Additive
+    s->num_colors = 1;
+  else if ( g.method == 2 )   // Red-Black
+    s->num_colors = 2;
+  else if ( g.method == 3 ) { // 16 Color
+    int flag = 0;
+    for ( mu=0; mu<4; mu++ ) {
+      if ( (l->local_lattice[mu]/l->block_lattice[mu]) % 2 == 1 )
+        flag = 1;
+    }
+    if ( flag == 0 )
+      s->num_colors = 16;
+    else {
+      s->num_colors = 2;
+      printf0("depth: %d, switching to red black schwarz as smoother\n", l->depth );
+    }
+  }
+  
+  const int sigma[16] = {0,1,3,2,6,4,5,7,15,14,12,13,9,11,10,8};
+  const int color_to_comm[16][2] = { {T,-1}, {X,+1}, {Y,+1}, {X,-1}, {Z,+1}, {Y,-1}, {X,+1}, {Y,+1},
+                               {T,+1}, {X,-1}, {Y,-1}, {X,+1}, {Z,-1}, {Y,+1}, {X,-1}, {Y,-1}  };
+  int color_counter[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  
+  s->num_block_sites = 1;
+  s->block_oe_offset = 0;
+  s->num_aggregates = 1;
+  
+  if ( g.method == 2 ) {
+    for ( i=0; i<8; i++ )
+      s->block_list_length[i]=0;
+  }
+  
+  for ( mu=0; mu<4; mu++ ) {
+    s->num_block_sites *= l->block_lattice[mu];
+    s->block_oe_offset += ((l->local_lattice[mu]/l->block_lattice[mu])*(g.my_coords[mu]/l->comm_offset[mu]))%2;
+    ls[mu] = 0;
+    le[mu] = ls[mu] + l->local_lattice[mu];
+    dt[mu] = l->local_lattice[mu]+2;
+    dt_mod[mu] = l->local_lattice[mu]+2;
+    l_st[mu] = ls[mu];
+    l_en[mu] = le[mu];
+    agg_split[mu] = l->local_lattice[mu]/l->coarsening[mu];
+    block_split[mu] = l->coarsening[mu]/l->block_lattice[mu];
+    block_size[mu] = l->block_lattice[mu];
+    s->num_aggregates *= agg_split[mu];
+  }
+  s->block_oe_offset = s->block_oe_offset%2;
+  s->block_vector_size = s->num_block_sites*l->num_lattice_site_var;
+
+  i = 0; j = 0;
+  // inner hyper cuboid
+  count[T] = &d1; count[Z] = &c1; count[Y] = &b1; count[X] = &a1;
+  for ( d0=0; d0<agg_split[T]; d0++ )
+    for ( c0=0; c0<agg_split[Z]; c0++ )
+      for ( b0=0; b0<agg_split[Y]; b0++ )
+        for ( a0=0; a0<agg_split[X]; a0++ ) {
+          
+          for ( d1=d0*block_split[T]; d1<(d0+1)*block_split[T]; d1++ )
+            for ( c1=c0*block_split[Z]; c1<(c0+1)*block_split[Z]; c1++ )
+              for ( b1=b0*block_split[Y]; b1<(b0+1)*block_split[Y]; b1++ )
+                for ( a1=a0*block_split[X]; a1<(a0+1)*block_split[X]; a1++ ) {
+                  
+                  s->block[j].start = i;
+                  s->block[j].no_comm = 1;
+                  if ( s->num_colors == 1 ) {
+                    s->block[j].color = 0;
+                  } else if ( s->num_colors == 2 ) {
+                    s->block[j].color = ( d1+c1+b1+a1+s->block_oe_offset )%2;
+                  } else if ( s->num_colors == 16 ) {
+                    for ( k=0; k<16; k++ )
+                      if ( sigma[k] == 8*(d1%2)+4*(c1%2)+2*(b1%2)+1*(a1%2) ) {
+                        s->block[j].color = k;
+                        s->block_list[k][color_counter[k]] = j;
+                        color_counter[k]++;
+                        break;
+                      }
+                  }
+                  
+                  if ( s->num_colors == 1 || s->num_colors == 2 ) {
+                    for ( mu=0; mu<4; mu++ ) {
+                      if ( ( (*count[mu]) == 0 ) || ( (*count[mu]+1) == le[mu]/block_size[mu] ) )
+                        s->block[j].no_comm = 0;
+                    }
+                    
+                    if ( s->num_colors == 2 ) {
+                      // calculate boundary correspondence of the block
+                      int count_plus=0, count_minus=0, count_inner=0, index;
+                      for ( mu=0; mu<4; mu++ ) {
+                        if ( (*count[mu]) == 0 )
+                          count_minus++;
+                        if ( (*count[mu]+1) == le[mu]/block_size[mu] )
+                          count_plus++;
+                        if ( (*count[mu]) != 0 && (*count[mu]+1) != le[mu]/block_size[mu] )
+                          count_inner++;
+                      }
+                      
+                      if ( count_inner == 4 ) {
+                        index = 4*s->block[j].color;
+                      } else if ( count_minus == 0 ) {
+                        if ( s->block[j].color == 0 ) index = 1;
+                        else index = 7;
+                      } else if ( count_plus == 0 ) {
+                        if ( s->block[j].color == 0 ) index = 3;
+                        else index = 5;
+                      } else {
+                        index = 2 + 4*s->block[j].color;
+                      }
+                      
+                      s->block_list[index][s->block_list_length[index]] = j;
+                      s->block_list_length[index]++;
+                    }
+                    
+                  } else if ( s->num_colors == 16 ) {
+                    k = s->block[j].color;
+                    if ( k == 0 ) {
+                      for ( mu=0; mu<4; mu++ ) {
+                        if ( (*count[mu]) == 0 )
+                          s->block[j].no_comm = 0;
+                      }
+                    } else {
+                      mu = color_to_comm[k][0];
+                      if ( (color_to_comm[k][1] == +1 && (*count[mu]+1) == le[mu]/block_size[mu]) ||
+                           (color_to_comm[k][1] == -1 && (*count[mu]) == 0 ) )
+                        s->block[j].no_comm = 0;
+                    }
+                  }
+                  
+                  j++;
+                  
+                  // set up index table
+                  if ( l->depth == 0 && g.odd_even ) {
+                    // odd even on the blocks
+                    // even sites
+                    for ( t=d1*block_size[T]; t<(d1+1)*block_size[T]; t++ )
+                      for ( z=c1*block_size[Z]; z<(c1+1)*block_size[Z]; z++ )
+                        for ( y=b1*block_size[Y]; y<(b1+1)*block_size[Y]; y++ )
+                          for ( x=a1*block_size[X]; x<(a1+1)*block_size[X]; x++ ) {
+                            if (((t-d1*block_size[T])+(z-c1*block_size[Z])+
+                                 (y-b1*block_size[Y])+(x-a1*block_size[X]))%2 == 0 ) {
+                              index = lex_index( t, z, y, x, dt );
+                              it[index] = i;
+                              i++;
+                            }
+                          }
+                    // odd sites
+                    for ( t=d1*block_size[T]; t<(d1+1)*block_size[T]; t++ )
+                      for ( z=c1*block_size[Z]; z<(c1+1)*block_size[Z]; z++ )
+                        for ( y=b1*block_size[Y]; y<(b1+1)*block_size[Y]; y++ )
+                          for ( x=a1*block_size[X]; x<(a1+1)*block_size[X]; x++ ) {
+                            if (((t-d1*block_size[T])+(z-c1*block_size[Z])+
+                                  (y-b1*block_size[Y])+(x-a1*block_size[X]))%2 == 1 ) {
+                              index = lex_index( t, z, y, x, dt );
+                              it[index] = i;
+                              i++;
+                            }
+                          }
+                  } else {
+                    // no odd even
+                    for ( t=d1*block_size[T]; t<(d1+1)*block_size[T]; t++ )
+                      for ( z=c1*block_size[Z]; z<(c1+1)*block_size[Z]; z++ )
+                        for ( y=b1*block_size[Y]; y<(b1+1)*block_size[Y]; y++ )
+                          for ( x=a1*block_size[X]; x<(a1+1)*block_size[X]; x++ ) {
+                            index = lex_index( t, z, y, x, dt );
+                            it[index] = i;
+                            i++;
+                          }
+                  }
+                }
+        }
+        
+  
+
+  // boundaries
+  for ( mu=0; mu<4; mu++ ) {
+    l_st[mu] = le[mu];
+    l_en[mu] = le[mu]+1;
+    for ( t=l_st[T]; t<l_en[T]; t++ )
+      for ( z=l_st[Z]; z<l_en[Z]; z++ )
+        for ( y=l_st[Y]; y<l_en[Y]; y++ )
+          for ( x=l_st[X]; x<l_en[X]; x++ ) {
+            index = lex_index( t, z, y, x, dt );
+            it[index] = i;
+            i++;
+          }  
+    l_st[mu] = ls[mu];
+    l_en[mu] = le[mu];
+  }
+  
+  // define negative boundaries
+  for ( mu=0; mu<4; mu++ ) {
+    l_st[mu] = ls[mu]-1;
+    l_en[mu] = ls[mu];
+    for ( t=l_st[T]; t<l_en[T]; t++ )
+      for ( z=l_st[Z]; z<l_en[Z]; z++ )
+        for ( y=l_st[Y]; y<l_en[Y]; y++ )
+          for ( x=l_st[X]; x<l_en[X]; x++ ) {
+            index = lex_mod_index( t, z, y, x, dt );
+            it[index] = i;
+            i++;
+          }  
+    l_st[mu] = ls[mu];
+    l_en[mu] = le[mu];
+  }
+
+  i = 0; j = 0;
+  // block boundary table
+  for ( d0=0; d0<agg_split[T]; d0++ )
+    for ( c0=0; c0<agg_split[Z]; c0++ )
+      for ( b0=0; b0<agg_split[Y]; b0++ )
+        for ( a0=0; a0<agg_split[X]; a0++ )
+          
+          for ( d1=d0*block_split[T]; d1<(d0+1)*block_split[T]; d1++ )
+            for ( c1=c0*block_split[Z]; c1<(c0+1)*block_split[Z]; c1++ )
+              for ( b1=b0*block_split[Y]; b1<(b0+1)*block_split[Y]; b1++ )
+                for ( a1=a0*block_split[X]; a1<(a0+1)*block_split[X]; a1++ ) {
+                  // for all blocks
+                  i=0;
+                  int block_start[4], block_end[4], tmp;
+                  
+                  block_start[T] = d1*block_size[T]; block_start[Z] = c1*block_size[Z];
+                  block_start[Y] = b1*block_size[Y]; block_start[X] = a1*block_size[X];
+                  block_end[T] = (d1+1)*block_size[T]; block_end[Z] = (c1+1)*block_size[Z];
+                  block_end[Y] = (b1+1)*block_size[Y]; block_end[X] = (a1+1)*block_size[X];
+                  
+                  for ( mu=0; mu<4; mu++ ) {
+                    tmp = block_start[mu];
+                                        
+                    // minus dir
+                    block_start[mu] = block_end[mu]-1;
+                    for ( t=block_start[T]; t<block_end[T]; t++ )
+                      for ( z=block_start[Z]; z<block_end[Z]; z++ )
+                        for ( y=block_start[Y]; y<block_end[Y]; y++ )
+                          for ( x=block_start[X]; x<block_end[X]; x++ ) {
+                            s->block[j].bt[i] = site_index( t, z, y, x, dt, it );
+                            i++;
+                            s->block[j].bt[i] = connect_link_double( t, z, y, x, mu, +1, dt, it, s, l );
+                            i++;
+                          }
+                          
+                    block_start[mu] = tmp;
+                    tmp = block_end[mu];
+                        
+                    // plus dir
+                    block_end[mu] = block_start[mu]+1;
+                    for ( t=block_start[T]; t<block_end[T]; t++ )
+                      for ( z=block_start[Z]; z<block_end[Z]; z++ )
+                        for ( y=block_start[Y]; y<block_end[Y]; y++ )
+                          for ( x=block_start[X]; x<block_end[X]; x++ ) {
+                            s->block[j].bt[i] = site_index( t, z, y, x, dt, it );
+                            i++;
+                            s->block[j].bt[i] = connect_link_double( t, z, y, x, mu, -1, dt, it, s, l );
+                            i++;
+                          }
+                    block_end[mu] = tmp;
+                  }
+                  j++;
+                }
+  
+  // index table for block dirac operator
+  if ( l->depth == 0 && g.odd_even ) {
+    count[T] = &t; count[Z] = &z; count[Y] = &y; count[X] = &x;
+    i=0; j=0;
+    for ( t=0; t<block_size[T]; t++ )
+      for ( z=0; z<block_size[Z]; z++ )
+        for ( y=0; y<block_size[Y]; y++ )
+          for ( x=0; x<block_size[X]; x++ ) {
+            if ( (t+z+y+x)%2 == 0 ) {
+              i++;
+            } else {
+              j++;
+            }
+          }
+    s->num_block_even_sites = i;
+    s->num_block_odd_sites = j;
+    
+    for ( mu=0; mu<4; mu++ ) {
+      // even sites, plus dir ( = odd sites, minus dir )
+      i=0; j=0;
+      for ( t=0; t<block_size[T]; t++ )
+        for ( z=0; z<block_size[Z]; z++ )
+          for ( y=0; y<block_size[Y]; y++ )
+            for ( x=0; x<block_size[X]; x++ ) {
+              if ( (t+z+y+x)%2 == 0 ) {
+                if ( *(count[mu]) < block_size[mu]-1 ) {
+                  s->oe_index[mu][j] = i; 
+                  j++;
+                }
+                i++;
+              }
+            }
+      s->dir_length_even[mu] = j;
+      // odd sites, plus dir ( = even sites, minus dir )
+      j=0;
+      for ( t=0; t<block_size[T]; t++ )
+        for ( z=0; z<block_size[Z]; z++ )
+          for ( y=0; y<block_size[Y]; y++ )
+            for ( x=0; x<block_size[X]; x++ ) {
+              if ( (t+z+y+x)%2 == 1 ) {
+                if ( *(count[mu]) < block_size[mu]-1 ) {
+                  s->oe_index[mu][s->dir_length_even[mu]+j] = i; 
+                  j++;
+                }
+                i++;
+              }
+            }
+      s->dir_length_odd[mu] = j;
+    }
+  }
+  
+  count[T] = &t; count[Z] = &z; count[Y] = &y; count[X] = &x;
+  for ( mu=0; mu<4; mu++ ) {
+    j=0;
+    for ( t=0; t<block_size[T]; t++ )
+      for ( z=0; z<block_size[Z]; z++ )
+        for ( y=0; y<block_size[Y]; y++ )
+          for ( x=0; x<block_size[X]; x++ ) {
+            if ( *(count[mu]) < block_size[mu]-1 ) {
+              s->index[mu][j] =  site_index( t, z, y, x, dt, it ); j++;
+            }
+          }
+  }
+  
+  // define neighbor table (for the application of the entire operator),
+  // negative inner boundary table (for communication),
+  // translation table (for translation to lexicographical site ordnering)
+  define_nt_bt_tt( s->op.neighbor_table, s->op.backward_neighbor_table, s->op.c.boundary_table, s->op.translation_table, it, dt, l );
+}
+
+
+void schwarz_double_boundary_update( schwarz_double_struct *s, level_struct *l ) {
+
+/*********************************************************************************
+* Updates the current level hopping term in "s->op.D" on the process boundaries
+* in all negative directions. This is necessary for enabling Schwarz to perform
+* local block residual updates on demand.
+*********************************************************************************/   
+
+  int i, t, z, y, x, mu, nu, index, *it = s->op.index_table, *dt = s->op.table_dim,
+      ls[4], le[4], buf_length[4], link_size;
+  vector_double buf[4] = {NULL,NULL,NULL,NULL}, rbuf[4] = {NULL,NULL,NULL,NULL};
+  config_double D=s->op.D;
+  
+  for ( mu=0; mu<4; mu++ ) {
+    ls[mu] = 0;
+    le[mu] = l->local_lattice[mu];
+    buf_length[mu] = 0;
+  }
+  
+  if ( l->depth == 0 )
+    link_size = 4*9;
+  else
+    link_size = 4*SQUARE(l->num_lattice_site_var);
+  
+  // allocate buffers
+  for ( mu=0; mu<4; mu++ ) {
+    if ( l->global_splitting[mu] > 1 ) {
+      buf_length[mu] = link_size;
+      for ( nu=0; nu<4; nu++ ) {
+        if ( nu != mu )
+          buf_length[mu] *= le[nu];
+      }
+      MALLOC( buf[mu], complex_double, buf_length[mu] );
+      MALLOC( rbuf[mu], complex_double, buf_length[mu] );
+    }
+  }
+  
+  // post recv for desired directions
+  for ( mu=0; mu<4; mu++ ) {
+    if ( l->global_splitting[mu] > 1 ) {
+      MPI_Irecv( rbuf[mu], buf_length[mu], MPI_COMPLEX_double, l->neighbor_rank[2*mu+1],
+                 2*mu+1, g.comm_cart, &(s->op.c.rreqs[2*mu+1]) );
+    }
+  }
+  
+  // buffer data for send and send it
+  for ( mu=0; mu<4; mu++ ) {
+    if ( l->global_splitting[mu] > 1 ) {
+      ls[mu] = l->local_lattice[mu]-1;
+      i=0;
+      for ( t=ls[T]; t<le[T]; t++ )
+        for ( z=ls[Z]; z<le[Z]; z++ )
+          for ( y=ls[Y]; y<le[Y]; y++ )
+            for ( x=ls[X]; x<le[X]; x++ ) {
+              index = site_index( t, z, y, x, dt, it );
+              vector_double_copy( buf[mu]+i*link_size, D+index*link_size, 0, link_size, l );
+              i++;
+            }
+      MPI_Isend( buf[mu], buf_length[mu], MPI_COMPLEX_double, l->neighbor_rank[2*mu],
+                 2*mu+1, g.comm_cart, &(s->op.c.sreqs[2*mu+1]) );
+      ls[mu] = 0;
+    }
+  }
+  
+  // store links in desired ordering after recv
+  for ( mu=0; mu<4; mu++ ) {
+    if ( l->global_splitting[mu] > 1 ) {
+      MPI_Wait( &(s->op.c.rreqs[2*mu+1]), MPI_STATUS_IGNORE );
+      ls[mu] = -1;
+      le[mu] = 0;
+      i=0;
+      for ( t=ls[T]; t<le[T]; t++ )
+        for ( z=ls[Z]; z<le[Z]; z++ )
+          for ( y=ls[Y]; y<le[Y]; y++ )
+            for ( x=ls[X]; x<le[X]; x++ ) {
+              index = site_mod_index( t, z, y, x, dt, it );
+              vector_double_copy( D+index*link_size, rbuf[mu]+i*link_size, 0, link_size, l );
+              i++;
+            }
+      ls[mu] = 0;
+      le[mu] = l->local_lattice[mu];
+    }
+  }
+  
+  // free buffers
+  for ( mu=0; mu<4; mu++ ) {
+    if ( l->global_splitting[mu] > 1 ) {
+      MPI_Wait( &(s->op.c.sreqs[2*mu+1]), MPI_STATUS_IGNORE );
+      FREE( buf[mu], complex_double, buf_length[mu] );
+      FREE( rbuf[mu], complex_double, buf_length[mu] );
+    }
+  }
+}
+
+
+void block_double_boundary_op( vector_double eta, vector_double phi, int k,
+                                  schwarz_double_struct *s, level_struct *l ) {
+  // k: number of current block
+  int *bbl = s->block_boundary_length;
+#ifdef OPTIMIZED_NEIGHBOR_COUPLING_double
+  double *Dplus = s->op.D_vectorized;
+  double *Dminus = s->op.D_transformed_vectorized;
+  
+  for ( int mu=0; mu<4; mu++ ) {
+    boundary_plus_coupling_double( (double*)eta, Dplus, (double*)phi,
+                                              mu, bbl[2*mu], bbl[2*mu+1], s->block[k].bt, NULL );
+    boundary_minus_coupling_double( (double*)eta, Dminus, (double*)phi,
+                                               mu, bbl[2*mu+1], bbl[2*mu+2], s->block[k].bt, NULL );
+  }
+#else
+  int i, mu, index, neighbor_index;
+  config_double D_pt, D = s->op.D;
+  vector_double phi_pt, eta_pt;
+
+#ifdef HAVE_TM1p1
+  if( g.n_flavours == 2 ) {
+    complex_double buf1[24], *buf2=buf1+12;
+    mu=T;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprp_T_double( buf1, phi_pt );
+      mvm_double( buf2, D_pt, buf1 );
+      mvm_double( buf2+3, D_pt, buf1+3 );
+      mvm_double( buf2+6, D_pt, buf1+6 );
+      mvm_double( buf2+9, D_pt, buf1+9 );
+      dpbp_su3_T_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprn_T_double( buf1, phi_pt );
+      mvmh_double( buf2, D_pt, buf1 );
+      mvmh_double( buf2+3, D_pt, buf1+3 );
+      mvmh_double( buf2+6, D_pt, buf1+6 );
+      mvmh_double( buf2+9, D_pt, buf1+9 );
+      dpbn_su3_T_double( buf2, eta_pt );
+    }
+    
+    mu=Z;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprp_Z_double( buf1, phi_pt );
+      mvm_double( buf2, D_pt, buf1 );
+      mvm_double( buf2+3, D_pt, buf1+3 );
+      mvm_double( buf2+6, D_pt, buf1+6 );
+      mvm_double( buf2+9, D_pt, buf1+9 );
+      dpbp_su3_Z_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprn_Z_double( buf1, phi_pt );
+      mvmh_double( buf2, D_pt, buf1 );
+      mvmh_double( buf2+3, D_pt, buf1+3 );
+      mvmh_double( buf2+6, D_pt, buf1+6 );
+      mvmh_double( buf2+9, D_pt, buf1+9 );
+      dpbn_su3_Z_double( buf2, eta_pt );
+    }
+    
+    mu=Y;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprp_Y_double( buf1, phi_pt );
+      mvm_double( buf2, D_pt, buf1 );
+      mvm_double( buf2+3, D_pt, buf1+3 );
+      mvm_double( buf2+6, D_pt, buf1+6 );
+      mvm_double( buf2+9, D_pt, buf1+9 );
+      dpbp_su3_Y_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprn_Y_double( buf1, phi_pt );
+      mvmh_double( buf2, D_pt, buf1 );
+      mvmh_double( buf2+3, D_pt, buf1+3 );
+      mvmh_double( buf2+6, D_pt, buf1+6 );
+      mvmh_double( buf2+9, D_pt, buf1+9 );
+      dpbn_su3_Y_double( buf2, eta_pt );
+    }
+  
+    mu=X;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprp_X_double( buf1, phi_pt );
+      mvm_double( buf2, D_pt, buf1 );
+      mvm_double( buf2+3, D_pt, buf1+3 );
+      mvm_double( buf2+6, D_pt, buf1+6 );
+      mvm_double( buf2+9, D_pt, buf1+9 );
+      dpbp_su3_X_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprn_X_double( buf1, phi_pt );
+      mvmh_double( buf2, D_pt, buf1 );
+      mvmh_double( buf2+3, D_pt, buf1+3 );
+      mvmh_double( buf2+6, D_pt, buf1+6 );
+      mvmh_double( buf2+9, D_pt, buf1+9 );
+      dpbn_su3_X_double( buf2, eta_pt );
+    }  
+  } else {
+#endif
+    complex_double buf1[12], *buf2=buf1+6;
+    mu=T;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prp_T_double( buf1, phi_pt );
+      mvm_double( buf2, D_pt, buf1 );
+      mvm_double( buf2+3, D_pt, buf1+3 );
+      pbp_su3_T_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prn_T_double( buf1, phi_pt );
+      mvmh_double( buf2, D_pt, buf1 );
+      mvmh_double( buf2+3, D_pt, buf1+3 );
+      pbn_su3_T_double( buf2, eta_pt );
+    }
+    
+    mu=Z;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prp_Z_double( buf1, phi_pt );
+      mvm_double( buf2, D_pt, buf1 );
+      mvm_double( buf2+3, D_pt, buf1+3 );
+      pbp_su3_Z_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prn_Z_double( buf1, phi_pt );
+      mvmh_double( buf2, D_pt, buf1 );
+      mvmh_double( buf2+3, D_pt, buf1+3 );
+      pbn_su3_Z_double( buf2, eta_pt );
+    }
+    
+    mu=Y;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prp_Y_double( buf1, phi_pt );
+      mvm_double( buf2, D_pt, buf1 );
+      mvm_double( buf2+3, D_pt, buf1+3 );
+      pbp_su3_Y_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prn_Y_double( buf1, phi_pt );
+      mvmh_double( buf2, D_pt, buf1 );
+      mvmh_double( buf2+3, D_pt, buf1+3 );
+      pbn_su3_Y_double( buf2, eta_pt );
+    }
+  
+    mu=X;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prp_X_double( buf1, phi_pt );
+      mvm_double( buf2, D_pt, buf1 );
+      mvm_double( buf2+3, D_pt, buf1+3 );
+      pbp_su3_X_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prn_X_double( buf1, phi_pt );
+      mvmh_double( buf2, D_pt, buf1 );
+      mvmh_double( buf2+3, D_pt, buf1+3 );
+      pbn_su3_X_double( buf2, eta_pt );
+    }  
+#ifdef HAVE_TM1p1
+  }
+#endif
+#endif
+}
+
+
+void n_block_double_boundary_op( vector_double eta, vector_double phi, int k,
+                                    schwarz_double_struct *s, level_struct *l ) {
+  // k: number of current block
+  int *bbl = s->block_boundary_length;
+#ifdef OPTIMIZED_NEIGHBOR_COUPLING_double
+  double *Dplus = s->op.D_vectorized;
+  double *Dminus = s->op.D_transformed_vectorized;
+  
+  for ( int mu=0; mu<4; mu++ ) {
+    boundary_nplus_coupling_double( (double*)eta, Dplus, (double*)phi,
+                                               mu, bbl[2*mu], bbl[2*mu+1], s->block[k].bt, NULL );
+    boundary_nminus_coupling_double( (double*)eta, Dminus, (double*)phi,
+                                                mu, bbl[2*mu+1], bbl[2*mu+2], s->block[k].bt, NULL );
+  }
+#else
+  int i, mu, index, neighbor_index;
+  config_double D_pt, D = s->op.D;
+  vector_double phi_pt, eta_pt;
+
+#ifdef HAVE_TM1p1
+  if( g.n_flavours == 2 ) {
+    complex_double buf1[24], *buf2=buf1+12;
+    mu=T;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprp_T_double( buf1, phi_pt );
+      nmvm_double( buf2, D_pt, buf1 );
+      nmvm_double( buf2+3, D_pt, buf1+3 );
+      nmvm_double( buf2+6, D_pt, buf1+6 );
+      nmvm_double( buf2+9, D_pt, buf1+9 );
+      dpbp_su3_T_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprn_T_double( buf1, phi_pt );
+      nmvmh_double( buf2, D_pt, buf1 );
+      nmvmh_double( buf2+3, D_pt, buf1+3 );
+      nmvmh_double( buf2+6, D_pt, buf1+6 );
+      nmvmh_double( buf2+9, D_pt, buf1+9 );
+      dpbn_su3_T_double( buf2, eta_pt );
+    }
+    
+    mu=Z;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprp_Z_double( buf1, phi_pt );
+      nmvm_double( buf2, D_pt, buf1 );
+      nmvm_double( buf2+3, D_pt, buf1+3 );
+      nmvm_double( buf2+6, D_pt, buf1+6 );
+      nmvm_double( buf2+9, D_pt, buf1+9 );
+      dpbp_su3_Z_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprn_Z_double( buf1, phi_pt );
+      nmvmh_double( buf2, D_pt, buf1 );
+      nmvmh_double( buf2+3, D_pt, buf1+3 );
+      nmvmh_double( buf2+6, D_pt, buf1+6 );
+      nmvmh_double( buf2+9, D_pt, buf1+9 );
+      dpbn_su3_Z_double( buf2, eta_pt );
+    }
+    
+    mu=Y;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprp_Y_double( buf1, phi_pt );
+      nmvm_double( buf2, D_pt, buf1 );
+      nmvm_double( buf2+3, D_pt, buf1+3 );
+      nmvm_double( buf2+6, D_pt, buf1+6 );
+      nmvm_double( buf2+9, D_pt, buf1+9 );
+      dpbp_su3_Y_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprn_Y_double( buf1, phi_pt );
+      nmvmh_double( buf2, D_pt, buf1 );
+      nmvmh_double( buf2+3, D_pt, buf1+3 );
+      nmvmh_double( buf2+6, D_pt, buf1+6 );
+      nmvmh_double( buf2+9, D_pt, buf1+9 );
+      dpbn_su3_Y_double( buf2, eta_pt );
+    }
+  
+    mu=X;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprp_X_double( buf1, phi_pt );
+      nmvm_double( buf2, D_pt, buf1 );
+      nmvm_double( buf2+3, D_pt, buf1+3 );
+      nmvm_double( buf2+6, D_pt, buf1+6 );
+      nmvm_double( buf2+9, D_pt, buf1+9 );
+      dpbp_su3_X_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 24*neighbor_index;
+      eta_pt = eta + 24*index;
+      dprn_X_double( buf1, phi_pt );
+      nmvmh_double( buf2, D_pt, buf1 );
+      nmvmh_double( buf2+3, D_pt, buf1+3 );
+      nmvmh_double( buf2+6, D_pt, buf1+6 );
+      nmvmh_double( buf2+9, D_pt, buf1+9 );
+      dpbn_su3_X_double( buf2, eta_pt );
+    }
+  } else {
+#endif
+    complex_double buf1[12], *buf2=buf1+6;
+    mu=T;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prp_T_double( buf1, phi_pt );
+      nmvm_double( buf2, D_pt, buf1 );
+      nmvm_double( buf2+3, D_pt, buf1+3 );
+      pbp_su3_T_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prn_T_double( buf1, phi_pt );
+      nmvmh_double( buf2, D_pt, buf1 );
+      nmvmh_double( buf2+3, D_pt, buf1+3 );
+      pbn_su3_T_double( buf2, eta_pt );
+    }
+    
+    mu=Z;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prp_Z_double( buf1, phi_pt );
+      nmvm_double( buf2, D_pt, buf1 );
+      nmvm_double( buf2+3, D_pt, buf1+3 );
+      pbp_su3_Z_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prn_Z_double( buf1, phi_pt );
+      nmvmh_double( buf2, D_pt, buf1 );
+      nmvmh_double( buf2+3, D_pt, buf1+3 );
+      pbn_su3_Z_double( buf2, eta_pt );
+    }
+    
+    mu=Y;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prp_Y_double( buf1, phi_pt );
+      nmvm_double( buf2, D_pt, buf1 );
+      nmvm_double( buf2+3, D_pt, buf1+3 );
+      pbp_su3_Y_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prn_Y_double( buf1, phi_pt );
+      nmvmh_double( buf2, D_pt, buf1 );
+      nmvmh_double( buf2+3, D_pt, buf1+3 );
+      pbn_su3_Y_double( buf2, eta_pt );
+    }
+    
+    mu=X;
+    // plus mu direction
+    for ( i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prp_X_double( buf1, phi_pt );
+      nmvm_double( buf2, D_pt, buf1 );
+      nmvm_double( buf2+3, D_pt, buf1+3 );
+      pbp_su3_X_double( buf2, eta_pt );
+    }
+    // minus mu direction
+    for ( i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      index = s->block[k].bt[i];
+      neighbor_index = s->block[k].bt[i+1];
+      D_pt = D + 36*neighbor_index + 9*mu;
+      phi_pt = phi + 12*neighbor_index;
+      eta_pt = eta + 12*index;
+      prn_X_double( buf1, phi_pt );
+      nmvmh_double( buf2, D_pt, buf1 );
+      nmvmh_double( buf2+3, D_pt, buf1+3 );
+      pbn_su3_X_double( buf2, eta_pt );
+    } 
+#ifdef HAVE_TM1p1
+  }
+#endif
+#endif 
+}
+
+
+void coarse_block_double_boundary_op( vector_double eta, vector_double phi,
+                                         int k, schwarz_double_struct *s, level_struct *l ) {
+  // k: number of current block
+  int *bbl = s->block_boundary_length, n = l->num_lattice_site_var;
+
+#ifdef OPTIMIZED_COARSE_NEIGHBOR_COUPLING_double
+  int column_offset = 2*SIMD_LENGTH_double*((l->num_parent_eig_vect+SIMD_LENGTH_double-1)/SIMD_LENGTH_double);
+  int vectorized_link_offset = 4*l->num_parent_eig_vect*column_offset;
+  
+  for ( int mu=0; mu<4; mu++ ) {
+    OPERATOR_TYPE_double *Dplus = s->op.D_vectorized + mu*vectorized_link_offset;
+    OPERATOR_TYPE_double *Dminus = s->op.D_transformed_vectorized + mu*vectorized_link_offset;
+    // plus mu direction
+    for ( int i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      int index = s->block[k].bt[i];
+      int neighbor_index = s->block[k].bt[i+1];
+      vector_double phi_pt = phi + n*neighbor_index;
+      vector_double eta_pt = eta + n*index;
+      coarse_hopp_double_vectorized( eta_pt, phi_pt, Dplus + 4*vectorized_link_offset*index, l );
+    }
+    // minus mu direction
+    for ( int i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      int index = s->block[k].bt[i];
+      int neighbor_index = s->block[k].bt[i+1];
+      vector_double phi_pt = phi + n*neighbor_index;
+      vector_double eta_pt = eta + n*index;
+      coarse_hopp_double_vectorized( eta_pt, phi_pt, Dminus + 4*vectorized_link_offset*neighbor_index, l );
+    }
+  }
+#else
+  config_double D = s->op.D;
+  int link_size = SQUARE(2*l->num_parent_eig_vect), site_size=4*link_size;
+  
+  for ( int mu=0; mu<4; mu++ ) {
+    // plus mu direction
+    for ( int i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      int index = s->block[k].bt[i];
+      int neighbor_index = s->block[k].bt[i+1];
+      vector_double phi_pt = phi + n*neighbor_index;
+      vector_double eta_pt = eta + n*index;
+      config_double D_pt = D + site_size*index + link_size*mu;
+      coarse_hopp_double( eta_pt, phi_pt, D_pt, l );
+    }
+    // minus mu direction
+    for ( int i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      int index = s->block[k].bt[i];
+      int neighbor_index = s->block[k].bt[i+1];
+      vector_double phi_pt = phi + n*neighbor_index;
+      vector_double eta_pt = eta + n*index;
+      config_double D_pt = D + site_size*neighbor_index + link_size*mu;
+      coarse_daggered_hopp_double( eta_pt, phi_pt, D_pt, l );
+    }
+  }
+#endif
+}
+
+
+void n_coarse_block_double_boundary_op( vector_double eta, vector_double phi,
+                                           int k, schwarz_double_struct *s, level_struct *l ) {
+  // k: number of current block
+  int *bbl = s->block_boundary_length, n = l->num_lattice_site_var;
+#ifdef OPTIMIZED_COARSE_NEIGHBOR_COUPLING_double
+  int column_offset = 2*SIMD_LENGTH_double*((l->num_parent_eig_vect+SIMD_LENGTH_double-1)/SIMD_LENGTH_double);
+  int vectorized_link_offset = 4*l->num_parent_eig_vect*column_offset;
+  
+  for ( int mu=0; mu<4; mu++ ) {
+    OPERATOR_TYPE_double *Dplus = s->op.D_vectorized + mu*vectorized_link_offset;
+    OPERATOR_TYPE_double *Dminus = s->op.D_transformed_vectorized + mu*vectorized_link_offset;
+    // plus mu direction
+    for ( int i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      int index = s->block[k].bt[i];
+      int neighbor_index = s->block[k].bt[i+1];
+      vector_double phi_pt = phi + n*neighbor_index;
+      vector_double eta_pt = eta + n*index;
+      coarse_n_hopp_double_vectorized( eta_pt, phi_pt, Dplus + 4*vectorized_link_offset*index, l );
+    }
+    // minus mu direction
+    for ( int i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      int index = s->block[k].bt[i];
+      int neighbor_index = s->block[k].bt[i+1];
+      vector_double phi_pt = phi + n*neighbor_index;
+      vector_double eta_pt = eta + n*index;
+      coarse_n_hopp_double_vectorized( eta_pt, phi_pt, Dminus + 4*vectorized_link_offset*neighbor_index, l );
+    }
+  }  
+#else
+  int link_size = SQUARE(2*l->num_parent_eig_vect), site_size=4*link_size;
+  config_double D = s->op.D;
+  
+  for ( int mu=0; mu<4; mu++ ) {
+    // plus mu direction
+    for ( int i=bbl[2*mu]; i<bbl[2*mu+1]; i+=2 ) {
+      int index = s->block[k].bt[i];
+      int neighbor_index = s->block[k].bt[i+1];
+      vector_double phi_pt = phi + n*neighbor_index;
+      vector_double eta_pt = eta + n*index;
+      config_double D_pt = D + site_size*index + link_size*mu;
+      coarse_n_hopp_double( eta_pt, phi_pt, D_pt, l );
+    }
+    // minus mu direction
+    for ( int i=bbl[2*mu+1]; i<bbl[2*mu+2]; i+=2 ) {
+      int index = s->block[k].bt[i];
+      int neighbor_index = s->block[k].bt[i+1];
+      vector_double phi_pt = phi + n*neighbor_index;
+      vector_double eta_pt = eta + n*index;
+      config_double D_pt = D + site_size*neighbor_index + link_size*mu;
+      coarse_n_daggered_hopp_double( eta_pt, phi_pt, D_pt, l );
+    }
+  }
+#endif
+}
+
+
+void schwarz_double_setup( schwarz_double_struct *s, operator_double_struct *op_in, level_struct *l ) {
+
+/*********************************************************************************  
+* Copies the Dirac operator and the clover term from op_in into the Schwarz 
+* struct (this function is depth 0 only).
+* - operator_double_struct *op_in: Input operator.                                  
+*********************************************************************************/
+
+  int i, index, n = l->num_inner_lattice_sites, *tt = s->op.translation_table;
+  config_double D_out_pt, clover_out_pt, odd_proj_out_pt;
+  config_double D_in_pt = op_in->D, clover_in_pt = op_in->clover, odd_proj_in_pt = op_in->odd_proj;
+  
+  s->op.m0 = op_in->m0;
+
+  for ( i=0; i<n; i++ ) {
+    index = tt[i];
+    D_out_pt = s->op.D + 36*index;
+    FOR36( *D_out_pt = (complex_double) *D_in_pt; D_out_pt++; D_in_pt++; );
+  }
+  
+  if ( g.csw != 0 ) {
+    for ( i=0; i<n; i++ ) {
+      index = tt[i];
+      clover_out_pt = s->op.clover + 42*index;
+      FOR42( *clover_out_pt = (complex_double) *clover_in_pt; clover_out_pt++; clover_in_pt++; );
+    }
+  } else {
+    for ( i=0; i<n; i++ ) {
+      index = tt[i];
+      clover_out_pt = s->op.clover + 12*index;
+      FOR12( *clover_out_pt = (complex_double) *clover_in_pt; clover_out_pt++; clover_in_pt++; );
+    }
+  }
+
+  for ( i=0; i<n; i++ ) {
+    index = tt[i];
+    odd_proj_out_pt = s->op.odd_proj + 12*index;
+    FOR12( *odd_proj_out_pt = (complex_double) *odd_proj_in_pt; odd_proj_out_pt++; odd_proj_in_pt++; );
+  }
+
+#ifdef HAVE_TM
+  tm_term_double_setup( (double) (g.mu_factor[l->depth]*op_in->mu), (double) (g.mu_factor[l->depth]*op_in->mu_even_shift), (double) (g.mu_factor[l->depth]*op_in->mu_odd_shift), &(s->op), l, no_threading );
+#endif  
+
+#ifdef HAVE_TM1p1
+  epsbar_term_double_setup( (double) (g.epsbar_factor[l->depth]*op_in->epsbar), (double) (g.epsbar_factor[l->depth]*op_in->epsbar_ig5_even_shift), (double) (g.epsbar_factor[l->depth]*op_in->epsbar_ig5_odd_shift), &(s->op), l, no_threading );
+#endif
+
+  schwarz_double_boundary_update( s, l );
+  
+  operator_double_set_couplings( &(s->op), l );
+
+  if ( g.odd_even )
+    schwarz_double_oddeven_setup( s, l );
+
+}
+
+void additive_schwarz_double( vector_double phi, vector_double D_phi, vector_double eta, const int cycles, int res, 
+                                 schwarz_double_struct *s, level_struct *l, struct Thread *threading ) {
+  
+  START_NO_HYPERTHREADS(threading)
+  
+  int k, mu, i, nb = s->num_blocks;
+  vector_double r = s->buf1, Dphi = s->buf4, latest_iter = s->buf2, x = s->buf3, latest_iter2 = s->buf5, swap = NULL;
+  void (*block_op)() = (l->depth==0)?block_d_plus_clover_double:coarse_block_operator_double;
+  void (*boundary_op)() = (l->depth==0)?block_double_boundary_op:coarse_block_double_boundary_op,
+       (*n_boundary_op)() = (l->depth==0)?n_block_double_boundary_op:n_coarse_block_double_boundary_op,
+       (* block_solve)() = (l->depth==0&&g.odd_even)?block_solve_oddeven_double:local_minres_double;
+
+
+  int nb_thread_start;
+  int nb_thread_end;
+  compute_core_start_end_custom(0, nb, &nb_thread_start, &nb_thread_end, l, threading, 1);
+  
+  SYNC_CORES(threading)
+  
+  if ( res == _NO_RES ) {
+    vector_double_copy( r, eta, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+    vector_double_define( x, 0, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+    START_MASTER(threading)
+    vector_double_define( x, 0, l->inner_vector_size, l->schwarz_vector_size, l );
+    END_MASTER(threading)
+  } else {
+    vector_double_copy( x, phi, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+    vector_double_copy( latest_iter, phi, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+  }
+  
+  
+  SYNC_CORES(threading)
+  
+  for ( k=0; k<cycles; k++ ) {
+    if ( res == _RES ) {
+      START_LOCKED_MASTER(threading)
+      for ( mu=0; mu<4; mu++ ) {
+        ghost_update_double( latest_iter, mu, +1, &(s->op.c), l );
+        ghost_update_double( latest_iter, mu, -1, &(s->op.c), l );
+      }
+      END_LOCKED_MASTER(threading)
+    } else {
+      SYNC_CORES(threading)
+    }
+      
+    for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+      // for all blocks of current color NOT involved in communication
+      if ( s->block[i].no_comm ) {
+        // calculate block residual
+        if ( res == _RES ) {
+          if ( k==0 ) {
+            block_op( Dphi, latest_iter, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+            boundary_op( Dphi, latest_iter, i, s, l, no_threading );
+            vector_double_minus( r, eta, Dphi, s->block[i].start*l->num_lattice_site_var,
+                                    s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+        } else {
+            n_boundary_op( r, latest_iter, i, s, l );
+          }
+        }
+        // local minres updates x, r and latest iter
+        block_solve( x, r, latest_iter2, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+      }
+    }
+    
+    if ( res == _RES ) {
+      START_LOCKED_MASTER(threading)
+      for ( mu=0; mu<4; mu++ ) {
+        ghost_update_wait_double( latest_iter, mu, +1, &(s->op.c), l );
+        ghost_update_wait_double( latest_iter, mu, -1, &(s->op.c), l );
+      }
+      END_LOCKED_MASTER(threading)
+    } else {
+      SYNC_CORES(threading)
+    }
+      
+    for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+      // for all blocks of current color involved in communication
+      if ( !s->block[i].no_comm ) {
+        // calculate block residual
+        if ( res == _RES ) {
+          if ( k==0 ) {
+            block_op( Dphi, latest_iter, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+            boundary_op( Dphi, latest_iter, i, s, l, no_threading );
+            vector_double_minus( r, eta, Dphi, s->block[i].start*l->num_lattice_site_var,
+                                    s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+          } else {
+            n_boundary_op( r, latest_iter, i, s, l );
+          }
+        }
+        // local minres updates x, r and latest iter
+        block_solve( x, r, latest_iter2, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+      }
+    }
+    res = _RES;
+    swap = latest_iter; latest_iter = latest_iter2; latest_iter2 = swap;
+  }
+
+  for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+    if ( l->relax_fac != 1.0 )
+      vector_double_scale( phi, x, l->relax_fac, s->block[i].start*l->num_lattice_site_var, s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+    else
+      vector_double_copy( phi, x, s->block[i].start*l->num_lattice_site_var, s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+  }
+  
+  // calculate D * phi with help of the almost computed residual
+  if ( D_phi != NULL ) {
+    START_LOCKED_MASTER(threading)
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    END_LOCKED_MASTER(threading)
+    
+    for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+      if ( s->block[i].no_comm ) {
+        n_boundary_op( r, latest_iter, i, s, l );
+        vector_double_minus( D_phi, eta, r,
+            s->block[i].start*l->num_lattice_site_var,
+            s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+        if ( l->relax_fac != 1.0 )
+          vector_double_scale( D_phi, D_phi, l->relax_fac, s->block[i].start*l->num_lattice_site_var,
+              s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+      }
+    }
+    
+    START_LOCKED_MASTER(threading)
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_wait_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_wait_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    END_LOCKED_MASTER(threading)
+    
+    for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+      if ( !s->block[i].no_comm ) {
+        n_boundary_op( r, latest_iter, i, s, l );
+        vector_double_minus( D_phi, eta, r,
+            s->block[i].start*l->num_lattice_site_var,
+            s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+        if ( l->relax_fac != 1.0 )
+          vector_double_scale( D_phi, D_phi, l->relax_fac, s->block[i].start*l->num_lattice_site_var,
+              s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+      }
+    }
+  }
+  SYNC_CORES(threading)
+  
+#ifdef SCHWARZ_RES
+  START_LOCKED_MASTER(threading)
+  if ( D_phi == NULL ) {
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    
+    for ( i=0; i<nb; i++ ) {
+      if ( s->block[i].no_comm ) {
+        n_boundary_op( r, latest_iter, i, s, l );
+      }
+    }
+    
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_wait_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_wait_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    
+    for ( i=0; i<nb; i++ ) {
+      if ( !s->block[i].no_comm ) {
+        n_boundary_op( r, latest_iter, i, s, l );
+      }
+    }
+  }
+  double r_norm = global_norm_double( r, 0, l->inner_vector_size, l, no_threading );
+  char number[3]; sprintf( number, "%2d", 31+l->depth ); printf0("\033[1;%2sm|", number );
+  printf0(" ---- depth: %d, c: %d, schwarz iter %2d, norm: %11.6le |", l->depth, s->num_colors, k, r_norm );
+  printf0("\033[0m\n"); fflush(0);
+  END_LOCKED_MASTER(threading)
+#endif
+
+  END_NO_HYPERTHREADS(threading)
+}
+
+
+void red_black_schwarz_double( vector_double phi, vector_double D_phi, vector_double eta, const int cycles, int res,
+                                  schwarz_double_struct *s, level_struct *l, struct Thread *threading ) {
+  
+  START_NO_HYPERTHREADS(threading)
+  
+  int k=0, mu, i, init_res = res, res_comm = res, step;
+  vector_double r = s->buf1;
+  vector_double Dphi = s->buf4;
+  vector_double latest_iter = s->buf2;
+  vector_double x = s->buf3;
+  void (*block_op)() = (l->depth==0)?block_d_plus_clover_double:coarse_block_operator_double;
+  void (*boundary_op)() = (l->depth==0)?block_double_boundary_op:coarse_block_double_boundary_op,
+       (*n_boundary_op)() = (l->depth==0)?n_block_double_boundary_op:n_coarse_block_double_boundary_op,
+       (*block_solve)() = (l->depth==0&&g.odd_even)?block_solve_oddeven_double:local_minres_double;
+  void (*communicate[2])() = {ghost_update_wait_double, ghost_update_double};
+  int commdir[8] = {+1,-1,-1,+1,-1,+1,+1,-1};
+       
+  SYNC_CORES(threading)
+       
+  int block_thread_start[8], block_thread_end[8];
+  for ( i=0; i<8; i++ )
+     compute_core_start_end_custom(0, s->block_list_length[i], block_thread_start+i, block_thread_end+i, l, threading, 1 );
+  int start, end;
+  compute_core_start_end_custom(0, l->inner_vector_size, &start, &end, l, threading, l->num_lattice_site_var );
+  
+  if ( res == _NO_RES ) {
+    vector_double_copy( r, eta, start, end, l );
+    vector_double_define( x, 0, start, end, l );
+    START_MASTER(threading)
+    vector_double_define( x, 0, l->inner_vector_size, l->schwarz_vector_size, l );
+    END_MASTER(threading)
+    SYNC_CORES(threading)
+  } else {
+    vector_double_copy( x, phi, start, end, l );
+    START_LOCKED_MASTER(threading)
+    for ( mu=0; mu<4; mu++ )
+      ghost_update_double( x, mu, +1, &(s->op.c), l );
+    for ( mu=0; mu<4; mu++ )
+      ghost_update_double( x, mu, -1, &(s->op.c), l );
+    END_LOCKED_MASTER(threading)
+  }
+  
+  // perform the Schwarz iteration, solve the block systems
+  for ( k=0; k<cycles; k++ ) {
+    for ( step=0; step<8; step++ ) {
+      for ( i=block_thread_start[step]; i<block_thread_end[step]; i++ ) {
+        int index = s->block_list[step][i];
+        START_MASTER(threading)
+        PROF_double_START( _SM3 );
+        END_MASTER(threading)
+        if ( res == _RES ) {
+          if ( k==0 && init_res == _RES ) {
+            block_op( Dphi, x, s->block[index].start*l->num_lattice_site_var, s, l, no_threading );
+            boundary_op( Dphi, x, index, s, l, no_threading );
+            vector_double_minus( r, eta, Dphi, s->block[index].start*l->num_lattice_site_var,
+                                    s->block[index].start*l->num_lattice_site_var+s->block_vector_size, l );
+          } else {
+            n_boundary_op( r, latest_iter, index, s, l );
+          }
+        }
+        START_MASTER(threading)
+        PROF_double_STOP( _SM3, 1 );
+        PROF_double_START( _SM4 );
+        END_MASTER(threading)
+        // local minres updates x, r and latest iter
+        block_solve( x, r, latest_iter, s->block[index].start*l->num_lattice_site_var, s, l, no_threading );
+        START_MASTER(threading)
+        PROF_double_STOP( _SM4, 1 );
+        END_MASTER(threading)
+      }
+      
+      if ( res_comm == _RES && !(k==cycles-1 && (step==6||step==7) && D_phi==NULL) ) {
+        START_LOCKED_MASTER(threading)
+        for ( mu=0; mu<4; mu++ ) {
+          communicate[(step%4)/2]( (k==0 && step < 6 && init_res == _RES)?x:latest_iter, mu, commdir[step], &(s->op.c), l );
+        }
+        END_LOCKED_MASTER(threading)
+      } else {
+        SYNC_CORES(threading)
+      }
+      
+      if ( k==0 && step == 5 ) res = _RES;
+      if ( k==0 && step == 1 ) res_comm = _RES;
+    }
+  }
+  
+  // copy phi = x
+  if ( l->relax_fac != 1.0 )
+    vector_double_scale( phi, x, l->relax_fac, start, end, l );
+  else
+    vector_double_copy( phi, x, start, end, l );
+  
+  // calculate D * phi from r
+  if ( D_phi != NULL ) {
+    for ( step=4; step<8; step++ ) {
+      for ( i=block_thread_start[step]; i<block_thread_end[step]; i++ ) {
+        int index = s->block_list[step][i];
+        vector_double_minus( D_phi, eta, r, s->block[index].start*l->num_lattice_site_var,
+                                s->block[index].start*l->num_lattice_site_var+s->block_vector_size, l );
+        if ( l->relax_fac != 1.0 ) {
+          vector_double_scale( D_phi, D_phi, l->relax_fac, s->block[index].start*l->num_lattice_site_var,
+                                  s->block[index].start*l->num_lattice_site_var+s->block_vector_size, l );
+        }
+      }
+    }
+    
+    for ( step=0; step<4; step++ ) {
+      for ( i=block_thread_start[step]; i<block_thread_end[step]; i++ ) {
+        int index = s->block_list[step][i];
+        
+        START_MASTER(threading)
+        PROF_double_START( _SM3 );
+        END_MASTER(threading)
+        n_boundary_op( r, latest_iter, index, s, l );
+        vector_double_minus( D_phi, eta, r, s->block[index].start*l->num_lattice_site_var,
+                                s->block[index].start*l->num_lattice_site_var+s->block_vector_size, l );
+        if ( l->relax_fac != 1.0 ) {
+          vector_double_scale( D_phi, D_phi, l->relax_fac, s->block[index].start*l->num_lattice_site_var,
+                                  s->block[index].start*l->num_lattice_site_var+s->block_vector_size, l );
+        }
+        START_MASTER(threading)
+        PROF_double_STOP( _SM3, 1 );
+        END_MASTER(threading)
+      }
+      if ( step == 0 || step == 1 ) {
+        START_LOCKED_MASTER(threading)
+        for ( mu=0; mu<4; mu++ ) {
+          communicate[0]( latest_iter, mu, commdir[step], &(s->op.c), l );
+        }
+        END_LOCKED_MASTER(threading)
+      } else {
+        SYNC_CORES(threading)
+      }
+    }
+  }
+  SYNC_CORES(threading)
+  
+#ifdef SCHWARZ_RES
+  int nb = s->num_blocks;
+  START_LOCKED_MASTER(threading)
+  if ( D_phi == NULL ) {
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    
+    for ( i=0; i<nb; i++ )
+      if ( s->block[i].no_comm )
+        n_boundary_op( r, latest_iter, i, s, l );
+    
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_wait_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_wait_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    
+    for ( i=0; i<nb; i++ )
+      if ( !s->block[i].no_comm )
+        n_boundary_op( r, latest_iter, i, s, l );
+
+  }
+  double r_norm = global_norm_double( r, 0, l->inner_vector_size, l, no_threading );
+  char number[3]; sprintf( number, "%2d", 31+l->depth ); printf0("\033[1;%2sm|", number );
+  printf0(" ---- depth: %d, c: %d, schwarz iter %2d, norm: %11.6le |", l->depth, s->num_colors, k, r_norm );
+  printf0("\033[0m\n"); fflush(0);
+  END_LOCKED_MASTER(threading)
+#endif
+  END_NO_HYPERTHREADS(threading)
+}
+
+
+void schwarz_double( vector_double phi, vector_double D_phi, vector_double eta, const int cycles, int res,
+                        schwarz_double_struct *s, level_struct *l, struct Thread *threading ) {
+  
+  START_NO_HYPERTHREADS(threading)
+
+  int color, k, mu, i, nb = s->num_blocks, init_res = res;
+  vector_double r = s->buf1;
+  vector_double Dphi = s->buf4;
+  vector_double latest_iter = s->buf2;
+  vector_double x = s->buf3;
+  void (*block_op)() = (l->depth==0)?block_d_plus_clover_double:coarse_block_operator_double;
+  void (*boundary_op)() = (l->depth==0)?block_double_boundary_op:coarse_block_double_boundary_op,
+       (*n_boundary_op)() = (l->depth==0)?n_block_double_boundary_op:n_coarse_block_double_boundary_op,
+       (*block_solve)() = (l->depth==0&&g.odd_even)?block_solve_oddeven_double:local_minres_double;
+  
+  SYNC_CORES(threading)
+  
+  int nb_thread_start;
+  int nb_thread_end;
+  compute_core_start_end_custom(0, nb, &nb_thread_start, &nb_thread_end, l, threading, 1);
+  
+  if ( res == _NO_RES ) {
+    vector_double_copy( r, eta, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+    vector_double_define( x, 0, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+  } else {
+    vector_double_copy( x, phi, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+  }
+    
+  START_MASTER(threading)
+  if ( res == _NO_RES ) {
+    vector_double_define( x, 0, l->inner_vector_size, l->schwarz_vector_size, l );
+  }
+  END_MASTER(threading)
+  
+  SYNC_CORES(threading)
+  
+  for ( k=0; k<cycles; k++ ) {
+    
+    for ( color=0; color<s->num_colors; color++ ) {
+      if ( res == _RES ) {
+        START_LOCKED_MASTER(threading)
+        for ( mu=0; mu<4; mu++ ) {
+          ghost_update_double( (k==0 && init_res == _RES)?x:latest_iter, mu, +1, &(s->op.c), l );
+          ghost_update_double( (k==0 && init_res == _RES)?x:latest_iter, mu, -1, &(s->op.c), l );
+        }
+        END_LOCKED_MASTER(threading)
+      } else {
+        // we need a barrier between black and white blocks
+        SYNC_CORES(threading)
+      }
+        
+      for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+        // for all blocks of current color NOT involved in communication
+        if ( color == s->block[i].color && s->block[i].no_comm ) {
+          // calculate block residual
+          START_MASTER(threading)
+          PROF_double_START( _SM1 );
+          END_MASTER(threading)
+          if ( res == _RES ) {
+            if ( k==0 && init_res == _RES ) {
+              block_op( Dphi, x, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+              boundary_op( Dphi, x, i, s, l, no_threading );
+              vector_double_minus( r, eta, Dphi, s->block[i].start*l->num_lattice_site_var,
+                                      s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+            } else {
+              n_boundary_op( r, latest_iter, i, s, l );
+            }
+          }
+          START_MASTER(threading)
+          PROF_double_STOP( _SM1, 1 );
+          // local minres updates x, r and latest iter
+          PROF_double_START( _SM2 );
+          END_MASTER(threading)
+          block_solve( x, r, latest_iter, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+          START_MASTER(threading)
+          PROF_double_STOP( _SM2, 1 );
+          END_MASTER(threading)
+        }
+      }
+      
+      if ( res == _RES ) {
+        START_LOCKED_MASTER(threading)
+        for ( mu=0; mu<4; mu++ ) {
+          ghost_update_wait_double( (k==0 && init_res == _RES)?x:latest_iter, mu, +1, &(s->op.c), l );
+          ghost_update_wait_double( (k==0 && init_res == _RES)?x:latest_iter, mu, -1, &(s->op.c), l );
+        }
+        END_LOCKED_MASTER(threading)
+      } else {
+        // we need a barrier between black and white blocks
+        SYNC_CORES(threading)
+      }
+        
+      for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+        // for all blocks of current color involved in communication
+        if ( color == s->block[i].color && !s->block[i].no_comm ) {
+          // calculate block residual
+          START_MASTER(threading)
+          PROF_double_START( _SM3 );
+          END_MASTER(threading)
+          if ( res == _RES ) {
+            if ( k==0 && init_res == _RES ) {
+              block_op( Dphi, x, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+              boundary_op( Dphi, x, i, s, l, no_threading );
+              vector_double_minus( r, eta, Dphi, s->block[i].start*l->num_lattice_site_var,
+                                      s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+            } else {
+              n_boundary_op( r, latest_iter, i, s, l );
+            }
+          }
+          START_MASTER(threading)
+          PROF_double_STOP( _SM3, 1 );
+          // local minres updates x, r and latest iter
+          PROF_double_START( _SM4 );
+          END_MASTER(threading)
+          block_solve( x, r, latest_iter, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+          START_MASTER(threading)
+          PROF_double_STOP( _SM4, 1 );
+          END_MASTER(threading)
+        }
+      }
+      res = _RES;
+    }
+  }
+  
+  for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+    if ( l->relax_fac != 1.0 )
+      vector_double_scale( phi, x, l->relax_fac, s->block[i].start*l->num_lattice_site_var, s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+    else
+      vector_double_copy( phi, x, s->block[i].start*l->num_lattice_site_var, s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+  }
+  
+  // calculate D * phi with help of the almost computed residual
+  // via updating the residual from odd to even
+  if ( D_phi != NULL ) {
+    START_LOCKED_MASTER(threading)
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    END_LOCKED_MASTER(threading)
+    
+    for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+      if ( 0 == s->block[i].color && s->block[i].no_comm ) {
+        n_boundary_op( r, latest_iter, i, s, l );
+        vector_double_minus( D_phi, eta, r, s->block[i].start*l->num_lattice_site_var,
+                                s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+        if ( l->relax_fac != 1.0 ) {
+          vector_double_scale( D_phi, D_phi, l->relax_fac, s->block[i].start*l->num_lattice_site_var,
+                                  s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+        }
+      }
+      if ( 1 == s->block[i].color ) {
+        vector_double_minus( D_phi, eta, r, s->block[i].start*l->num_lattice_site_var,
+                                s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+        if ( l->relax_fac != 1.0 ) {
+          vector_double_scale( D_phi, D_phi, l->relax_fac, s->block[i].start*l->num_lattice_site_var,
+                                  s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+        }
+      }
+    }
+    
+    START_LOCKED_MASTER(threading)
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_wait_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_wait_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    END_LOCKED_MASTER(threading)
+    
+    for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+      if ( 0 == s->block[i].color && !s->block[i].no_comm ) {
+        n_boundary_op( r, latest_iter, i, s, l );
+        vector_double_minus( D_phi, eta, r, s->block[i].start*l->num_lattice_site_var,
+                                s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+        if ( l->relax_fac != 1.0 ) {
+          vector_double_scale( D_phi, D_phi, l->relax_fac, s->block[i].start*l->num_lattice_site_var,
+                                  s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+        }
+      }
+    }    
+  }
+  SYNC_CORES(threading)
+  
+#ifdef SCHWARZ_RES
+  START_LOCKED_MASTER(threading)
+  if ( D_phi == NULL ) {
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    
+    for ( i=0; i<nb; i++ )
+      if ( s->block[i].no_comm ) 
+        n_boundary_op( r, latest_iter, i, s, l );
+
+    
+    for ( mu=0; mu<4; mu++ ) {
+      ghost_update_wait_double( latest_iter, mu, +1, &(s->op.c), l );
+      ghost_update_wait_double( latest_iter, mu, -1, &(s->op.c), l );
+    }
+    
+    for ( i=0; i<nb; i++ )
+      if ( !s->block[i].no_comm ) 
+        n_boundary_op( r, latest_iter, i, s, l );
+  }
+
+  double r_norm = global_norm_double( r, 0, l->inner_vector_size, l, no_threading );
+  char number[3]; sprintf( number, "%2d", 31+l->depth ); printf0("\033[1;%2sm|", number );
+  printf0(" ---- depth: %d, c: %d, schwarz iter %2d, norm: %11.6le |", l->depth, s->num_colors, k, r_norm );
+  printf0("\033[0m\n"); fflush(0);
+  END_LOCKED_MASTER(threading)
+#endif
+
+  END_NO_HYPERTHREADS(threading)
+}
+
+
+void sixteen_color_schwarz_double( vector_double phi, vector_double D_phi, vector_double eta, const int cycles, int res, 
+                                      schwarz_double_struct *s, level_struct *l, struct Thread *threading ) {
+  
+  START_NO_HYPERTHREADS(threading)
+  ASSERT( D_phi == NULL );
+  
+  if ( s->num_colors == 2 ) schwarz_double( phi, D_phi, eta, cycles, res, s, l, no_threading );
+  else {
+    int color, k, mu, i, nb = s->num_blocks;
+    vector_double r = s->buf1, Dphi = s->buf4, latest_iter = s->buf2, x = s->buf3;
+    void (*block_op)() = (l->depth==0)?block_d_plus_clover_double:coarse_block_operator_double;
+    void (*boundary_op)() = (l->depth==0)?block_double_boundary_op:coarse_block_double_boundary_op,
+         (*n_boundary_op)() = (l->depth==0)?n_block_double_boundary_op:n_coarse_block_double_boundary_op,
+         (*block_solve)() = (l->depth==0&&g.odd_even)?block_solve_oddeven_double:local_minres_double;
+        
+    int color_to_comm[16][2] = { {T,-1}, {X,+1}, {Y,+1}, {X,-1}, {Z,+1}, {Y,-1}, {X,+1}, {Y,+1},
+                                {T,+1}, {X,-1}, {Y,-1}, {X,+1}, {Z,-1}, {Y,+1}, {X,-1}, {Y,-1}  };
+
+    int nb_thread_start;
+    int nb_thread_end;
+    compute_core_start_end_custom(0, nb, &nb_thread_start, &nb_thread_end, l, threading, 1);
+    
+    SYNC_CORES(threading)
+    
+    if ( res == _NO_RES ) {
+      vector_double_copy( r, eta, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+      vector_double_define( x, 0, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+    } else {
+      vector_double_copy( x, phi, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+    }
+    
+    START_MASTER(threading)
+    if ( res == _NO_RES ) {
+      vector_double_define( x, 0, l->inner_vector_size, l->schwarz_vector_size, l );
+    }
+    END_MASTER(threading)
+    
+    SYNC_CORES(threading)
+    
+    for ( k=0; k<cycles; k++ ) {
+      for ( color=0; color<s->num_colors; color++ ) {
+        
+        // comm start
+        if ( res == _RES ) {
+          START_LOCKED_MASTER(threading)
+          ghost_update_double( k==0?x:latest_iter, color_to_comm[color][0], color_to_comm[color][1], &(s->op.c), l );
+          if ( color == 0 && (k==0 || k==1) ) {
+            for ( mu=1; mu<4; mu++ ) {
+              ghost_update_double( k==0?x:latest_iter, mu, -1, &(s->op.c), l );
+            }
+          }
+          END_LOCKED_MASTER(threading)
+        } else {
+          SYNC_CORES(threading)
+        }
+        
+        // blocks which have their latest neighbor information available
+        for ( i=nb_thread_start; i<nb_thread_end; i++ ) {          
+          if (  color == s->block[i].color && s->block[i].no_comm ) {
+            if ( res == _RES ) {
+              if ( k==0 ) {
+                block_op( Dphi, x, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+                boundary_op( Dphi, x, i, s, l, no_threading );
+                vector_double_minus( r, eta, Dphi, s->block[i].start*l->num_lattice_site_var,
+                                        s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+              } else {
+                n_boundary_op( r, latest_iter, i, s, l );
+              }
+            }
+            // local minres updates x, r and latest iter
+            block_solve( x, r, latest_iter, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+          }
+        }
+        
+        // comm wait
+        if ( res == _RES ) {
+          START_LOCKED_MASTER(threading)
+          ghost_update_wait_double( k==0?x:latest_iter, color_to_comm[color][0], color_to_comm[color][1], &(s->op.c), l );
+          if ( color == 0 && (k==0 || k==1) ) {
+            for ( mu=1; mu<4; mu++ ) {
+              ghost_update_wait_double( k==0?x:latest_iter, mu, -1, &(s->op.c), l );
+            }
+          }
+          END_LOCKED_MASTER(threading)
+        } else {
+          SYNC_CORES(threading)
+        }
+        
+        // blocks which require certain ghost cell updates
+        for ( i=nb_thread_start; i<nb_thread_end; i++ ) {
+          if ( color == s->block[i].color && !s->block[i].no_comm ) {
+            if ( res == _RES ) {
+              if ( k==0 ) {
+                block_op( Dphi, x, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+                boundary_op( Dphi, x, i, s, l, no_threading );
+                vector_double_minus( r, eta, Dphi, s->block[i].start*l->num_lattice_site_var,
+                                        s->block[i].start*l->num_lattice_site_var+s->block_vector_size, l );
+              } else {
+                n_boundary_op( r, latest_iter, i, s, l );
+              }
+            }
+            // local minres updates x, r and latest iter
+            block_solve( x, r, latest_iter, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+          }
+        }
+             
+        res = _RES;
+      }
+    }
+
+    SYNC_CORES(threading)
+    
+    if ( l->relax_fac != 1.0 )
+      vector_double_scale( phi, x, l->relax_fac, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+    else
+      vector_double_copy( phi, x, nb_thread_start*s->block_vector_size, nb_thread_end*s->block_vector_size, l );
+    
+    SYNC_CORES(threading)
+    
+#ifdef SCHWARZ_RES
+    START_LOCKED_MASTER(threading)
+    vector_double true_r = NULL;
+
+    PUBLIC_MALLOC( true_r, complex_double, l->vector_size );
+    vector_double_define( true_r, 0, 0, l->inner_vector_size, l );
+
+
+    if ( D_phi == NULL ) {
+      for ( mu=0; mu<4; mu++ ) {
+        ghost_update_double( x, mu, +1, &(s->op.c), l );
+        ghost_update_double( x, mu, -1, &(s->op.c), l );
+      }
+      for ( i=0; i<nb; i++ ) {
+        block_op( true_r, x, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+      }
+      for ( mu=0; mu<4; mu++ ) {
+        ghost_update_wait_double( x, mu, +1, &(s->op.c), l );
+        ghost_update_wait_double( x, mu, -1, &(s->op.c), l );
+      }
+      for ( i=0; i<nb; i++ ) {
+        boundary_op( true_r, x, i, s, l );
+      }
+    }
+    vector_double_saxpy( true_r, eta, true_r, -1, 0, l->inner_vector_size, l );
+    double r_norm = global_norm_double( true_r, 0, l->inner_vector_size, l, no_threading ),
+      den = global_norm_double( eta, 0, l->inner_vector_size, l, no_threading );
+    r_norm/=den;
+    char number[3]; sprintf( number, "%2d", 31+l->depth ); printf0("\033[1;%2sm|", number );
+    printf0(" ---- depth: %d, c: %d, schwarz iter %2d, norm: %11.6le |", l->depth, s->num_colors, k, r_norm );
+    printf0("\033[0m\n"); fflush(0);
+    PUBLIC_FREE( true_r, complex_double, l->vector_size );
+    END_LOCKED_MASTER(threading)
+#endif
+  }
+  
+  END_NO_HYPERTHREADS(threading)
+}
+
+
+void trans_double( vector_double out, vector_double in, int *tt, level_struct *l, struct Thread *threading ) {
+  
+  int i, index;
+  vector_double out_pt = out; vector_double in_pt = in;
+  int start = threading->start_site[l->depth];
+  int end   = threading->end_site[l->depth];
+
+  // this function seems to do some data reordering, barriers ensure that everything is in sync
+  SYNC_CORES(threading)
+  START_NO_HYPERTHREADS(threading)
+#ifdef HAVE_TM1p1
+  if( g.n_flavours == 2 )
+    for ( i=start; i<end; i++ ) {
+      index = tt[i];
+      out_pt = out + 24*index;
+      in_pt  = in + 24*i;
+      FOR24( *out_pt = (complex_double) *in_pt; out_pt++; in_pt++; )
+    }
+  else
+#endif
+  for ( i=start; i<end; i++ ) {
+    index = tt[i];
+    out_pt = out + 12*index;
+    in_pt  = in + 12*i;
+    FOR12( *out_pt = (complex_double) *in_pt; out_pt++; in_pt++; )
+  }
+  END_NO_HYPERTHREADS(threading)
+  SYNC_CORES(threading)
+}
+
+
+void trans_back_double( vector_double out, vector_double in, int *tt, level_struct *l, struct Thread *threading ) {
+  
+  int i, index;
+  vector_double out_pt = out; vector_double in_pt = in;
+  int start = threading->start_site[l->depth];
+  int end   = threading->end_site[l->depth];
+
+  // this function seems to do some data reordering, barriers ensure that everything is in sync
+  SYNC_CORES(threading)
+  START_NO_HYPERTHREADS(threading)
+#ifdef HAVE_TM1p1
+  if( g.n_flavours == 2 )
+    for ( i=start; i<end; i++ ) {
+      index = tt[i];
+      in_pt = in + 24*index;
+      out_pt = out + 24*i;
+      FOR24( *out_pt = (complex_double) *in_pt; out_pt++; in_pt++; )
+    }
+  else
+#endif
+  for ( i=start; i<end; i++ ) {
+    index = tt[i];
+    in_pt = in + 12*index;
+    out_pt = out + 12*i;
+    FOR12( *out_pt = (complex_double) *in_pt; out_pt++; in_pt++; )
+  }
+  END_NO_HYPERTHREADS(threading)
+  SYNC_CORES(threading)
+}
+
+
+void schwarz_double_def( schwarz_double_struct *s, operator_double_struct *op, level_struct *l ) {
+
+  schwarz_double_alloc( s, l );
+  schwarz_layout_double_define( s, l );
+  schwarz_double_setup( s, op, l );
+}
+
+
+void schwarz_double_mvm_testfun( schwarz_double_struct *s, level_struct *l, struct Thread *threading ) {
+  
+  START_UNTHREADED_FUNCTION(threading)
+
+  int mu, i, nb = s->num_blocks;
+  int svs = l->schwarz_vector_size;
+  int ivs = l->inner_vector_size;
+  int vs = l->vector_size;
+
+  void (*block_op)() = (l->depth==0)?block_d_plus_clover_double:coarse_block_operator_double;
+  void (*op)() = (l->depth==0)?d_plus_clover_double:apply_coarse_operator_double;
+  void (*boundary_op)() = (l->depth==0)?block_double_boundary_op:coarse_block_double_boundary_op;
+  
+  vector_double v1 = NULL, v2 = NULL, v3 = NULL;
+  double diff;
+  
+  MALLOC( v1, complex_double, svs );
+  MALLOC( v2, complex_double, vs );
+  MALLOC( v3, complex_double, vs );
+
+  vector_double_define_random( v1, 0, ivs, l );
+
+  op( v3, v1, &(s->op), l, no_threading );
+
+  for ( mu=0; mu<4; mu++ ) {
+    ghost_update_double( v1, mu, +1, &(s->op.c), l );
+    ghost_update_double( v1, mu, -1, &(s->op.c), l );
+  }
+      
+  for ( mu=0; mu<4; mu++ ) {
+    ghost_update_wait_double( v1, mu, +1, &(s->op.c), l );
+    ghost_update_wait_double( v1, mu, -1, &(s->op.c), l );
+  }
+
+  for ( i=0; i<nb; i++ ) {
+    block_op( v2, v1, s->block[i].start*l->num_lattice_site_var, s, l, no_threading );
+    boundary_op( v2, v1, i, s, l, no_threading );
+  }
+
+  vector_double_minus( v3, v3, v2, 0, l->inner_vector_size, l );  
+  diff = global_norm_double( v3, 0, l->inner_vector_size, l, no_threading ) /
+    global_norm_double( v2, 0, l->inner_vector_size, l, no_threading );
+  
+  test0_double("depth: %d, correctness of local residual vector: %le\n", l->depth, diff );
+      
+  FREE( v1, complex_double, l->schwarz_vector_size );
+  FREE( v2, complex_double, l->vector_size );
+  FREE( v3, complex_double, l->vector_size );
+
+  END_UNTHREADED_FUNCTION(threading)
+}
+

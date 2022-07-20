@@ -1,0 +1,619 @@
+/*
+ * Copyright (C) 2016, Matthias Rottmann, Artur Strebel, Simon Heybrock, Simone Bacchio, Bjoern Leder.
+ * 
+ * This file is part of the DDalphaAMG solver library.
+ * 
+ * The DDalphaAMG solver library is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * The DDalphaAMG solver library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with the DDalphaAMG solver library. If not, see http://www.gnu.org/licenses/.
+ * 
+ */
+
+#include <stdio.h>
+#include <malloc.h>
+#include <stdlib.h>
+#include <string.h>
+#include <mpi.h>
+#include <complex.h>
+#include <math.h>
+#include <time.h>
+#include <stdarg.h>
+
+#ifndef MAIN_HEADER
+  #define MAIN_HEADER
+
+  #define STRINGLENGTH 500
+  
+  #define _FILE_OFFSET_BITS 64
+  #define EPS_double 1E-14
+
+  #define HAVE_TM      // flag for enable twisted mass
+  #define HAVE_TM1p1   // flag for enable doublet for twisted mass
+
+  #undef INIT_ONE_PREC // flag undef for enabling additional features in the lib
+  
+  #define FOR2( e )  { e e }
+  #define FOR3( e )  { e e e }
+  #define FOR4( e )  { e e e e }
+  #define FOR6( e )  { e e e  e e e }
+  #define FOR10( e ) { e e e e e  e e e e e }
+  #define FOR12( e ) { e e e  e e e  e e e  e e e }
+  #define FOR20( e ) { FOR10( e ) FOR10( e )  }
+  #define FOR24( e ) { FOR12( e ) FOR12( e ) }
+  #define FOR36( e ) { FOR12( e ) FOR12( e ) FOR12( e ) }
+  #define FOR40( e ) { FOR20( e ) FOR20( e ) }
+  #define FOR42( e ) { FOR36( e ) FOR6( e ) }
+  
+  #define SQUARE( e ) (e)*(e)
+  #define NORM_SQUARE_double( e ) SQUARE(creal( e ))+SQUARE(cimag( e ))
+  #define CSPLIT( e ) creal(e), cimag(e)
+  
+  #define MPI_double MPI_DOUBLE
+  #define MPI_COMPLEX_double MPI_DOUBLE_COMPLEX
+  #define I _Complex_I
+  #define conj_double conj
+  #define cabs_double cabs
+  #define creal_double creal
+  #define cimag_double cimag
+  #define csqrt_double csqrt
+  #define sqrt_double sqrt
+  #define cpow_double cpow
+  #define pow_double pow
+  #define abs_double fabs
+  
+#if defined(GCRODR) || defined(POLYPREC)
+  #define geev_double LAPACKE_zgeev 
+  #define ggev_double LAPACKE_zggev
+  #define geqr2_double LAPACKE_zgeqr2
+  #define ungqr_double LAPACKE_zungqr
+  #define trtri_double LAPACKE_ztrtri
+  #define gesv_double LAPACKE_zgesv
+  #define gels_double LAPACKE_zgels
+#endif
+
+#ifdef MUMPS_ADDS  
+//Self written sparse matrix multiplication
+  #define gemv_double zgemv_
+  #define gemv_float cgemv_
+  extern void zgemv_(char *transA, int *m, int *n, double complex *alpha, double complex *A, int *lda, double complex *X, int *incx, double complex *beta, double  complex *Y, int *incy);
+  extern void cgemv_(char *transA, int *m, int *n, float complex *alpha, float complex *A, int *lda, float complex *X, int *incx, float complex *beta, float  complex *Y, int *incy);
+
+
+  #include "/home/leemhuis/installs/MUMPS_5.4.0/include/cmumps_c.h"
+  #include "/home/leemhuis/installs/MUMPS_5.4.0/include/dmumps_c.h"
+  #include "/home/leemhuis/installs/MUMPS_5.4.0/include/zmumps_c.h"
+
+  #define JOB_INIT -1
+  #define JOB_END -2
+  #define USE_COMM_WORLD -987654
+  #define ICNTL(I) icntl[(I) -1]       //macro according to docu //bridges from fortran indices to c
+#endif
+
+#ifdef SSE
+  #define MALLOC( variable, kind, length ) do{ if ( variable != NULL ) { \
+  printf0("malloc of \"%s\" failed: pointer is not NULL (%s:%d).\n", #variable, __FILE__, __LINE__ ); } \
+  if ( (length) > 0 ) { variable = (kind*) memalign( 64, sizeof(kind) * (length) ); } \
+  if ( variable == NULL && (length) > 0 ) { \
+  error0("malloc of \"%s\" failed: no memory allocated (%s:%d), current memory used: %lf GB.\n", \
+  #variable, __FILE__, __LINE__, g.cur_storage/1024.0 ); } \
+  g.cur_storage += (sizeof(kind) * (length))/(1024.0*1024.0); \
+  if ( g.cur_storage > g.max_storage ) g.max_storage = g.cur_storage; }while(0)
+#else
+  #define MALLOC( variable, kind, length ) do{ if ( variable != NULL ) { \
+  printf0("malloc of \"%s\" failed: pointer is not NULL (%s:%d).\n", #variable, __FILE__, __LINE__ ); } \
+  if ( (length) > 0 ) { variable = (kind*) malloc( sizeof(kind) * (length) ); } \
+  if ( variable == NULL && (length) > 0 ) { \
+  error0("malloc of \"%s\" failed: no memory allocated (%s:%d), current memory used: %lf GB.\n", \
+  #variable, __FILE__, __LINE__, g.cur_storage/1024.0 ); } \
+  g.cur_storage += (sizeof(kind) * (length))/(1024.0*1024.0); \
+  if ( g.cur_storage > g.max_storage ) g.max_storage = g.cur_storage; }while(0)
+#endif
+
+  #define FREE( variable, kind, length ) do{ if ( variable != NULL ) { \
+  free( variable ); variable = NULL; g.cur_storage -= (sizeof(kind) * (length))/(1024.0*1024.0); } else { \
+  printf0("multiple free of \"%s\"? pointer is already NULL (%s:%d).\n", #variable, __FILE__, __LINE__ ); } }while(0)
+
+
+  // allocate and deallocate macros (hugepages, aligned)
+  #include <fcntl.h>
+  #include <sys/mman.h>
+  #define HUGE_PAGE_SIZE (2 * 1024 * 1024)
+  #define ROUND_UP_TO_FULL_PAGE(x) \
+    (((x) + HUGE_PAGE_SIZE - 1) / HUGE_PAGE_SIZE * HUGE_PAGE_SIZE)
+  
+//   void *tmppointer = (void*)(variable);
+//   posix_memalign( &tmppointer, alignment, sizeof(kind)*(length));
+//   variable = (kind*)tmppointer; }
+  
+  #define MALLOC_HUGEPAGES( variable, kind, length, alignment ) do { if ( variable != NULL ) { \
+  printf0("malloc of \"%s\" failed: pointer is not NULL (%s:%d).\n", #variable, __FILE__, __LINE__ ); } \
+  if ( (length) > 0 ) { \
+  variable = (kind*)memalign( alignment, sizeof(kind)*((size_t)length)); } \
+  if ( variable == NULL && (length) > 0 ) { \
+  error0("malloc of \"%s\" failed: no memory allocated (%s:%d), current memory used: %lf GB.\n", \
+  #variable, __FILE__, __LINE__, g.cur_storage/1024.0 ); } \
+  g.cur_storage += (sizeof(kind) * (length))/(1024.0*1024.0); \
+  if ( g.cur_storage > g.max_storage ) g.max_storage = g.cur_storage; }while(0)
+  
+  #define FREE_HUGEPAGES( addr, kind, length ) FREE( addr, kind, length )
+  
+  #ifdef DEBUG
+    #define DPRINTF0 printf0
+  #else
+    #define DPRINTF0( ARGS, ... )
+  #endif
+    
+  #define PUBLIC_MALLOC( variable, kind, size ) do{ START_MASTER(threading) MALLOC( variable, kind, size ); \
+  ((kind**)threading->workspace)[0] = variable; END_MASTER(threading) SYNC_MASTER_TO_ALL(threading) \
+  variable = ((kind**)threading->workspace)[0]; SYNC_MASTER_TO_ALL(threading) }while(0)
+  
+  #define PUBLIC_FREE( variable, kind, size ) do{ SYNC_MASTER_TO_ALL(threading) \
+  START_MASTER(threading) FREE( variable, kind, size ); END_MASTER(threading) SYNC_MASTER_TO_ALL(threading) variable = NULL; }while(0)
+  
+  #define PUBLIC_MALLOC2( variable, kind, size, thrdng ) do{ START_MASTER(thrdng) MALLOC( variable, kind, size ); \
+  ((kind**)thrdng->workspace)[0] = variable; END_MASTER(thrdng) SYNC_MASTER_TO_ALL(thrdng) \
+  variable = ((kind**)thrdng->workspace)[0]; SYNC_MASTER_TO_ALL(thrdng) }while(0)
+  
+  #define PUBLIC_FREE2( variable, kind, size, thrdng ) do{ SYNC_MASTER_TO_ALL(thrdng) \
+  START_MASTER(thrdng) FREE( variable, kind, size ); END_MASTER(thrdng) SYNC_MASTER_TO_ALL(thrdng) variable = NULL; }while(0)
+  
+  
+  #define ASSERT( expression ) do{ if ( !(expression) ) { \
+  error0("assertion \"%s\" failed (%s:%d)\n       bad choice of input parameters (please read the user manual in /doc).\n", \
+  #expression, __FILE__, __LINE__ ); } }while(0)
+  
+  #define IMPLIES( A, B ) !( A ) || ( B )
+  #define XOR( A, B ) (( A ) && !( B )) || (!( A ) && ( B ))
+  #define NAND( A, B ) !( (A) && (B) )
+  #define DIVIDES( A, B ) A == 0 || ((double)(B)/(double)(A) - (double)((int)(B)/(int)(A))) == 0 
+  #define ASCENDING( A, B, C ) ( (A)<=(B) ) && ( (B)<=(C) )
+  #define MAX( A, B ) ( (A > B) ? A : B )
+  #define MIN( A, B ) ( (A < B) ? A : B )
+  
+  #ifdef DEBUG
+  #define DEBUGOUTPUT_ARRAY( A, FORMAT, INDEX ) do{ \
+  char TMPSTRING[100]; sprintf( TMPSTRING, "%s[%d] = %s\n", #A, INDEX, FORMAT ); \
+  printf0( TMPSTRING, A[INDEX] ); }while(0)
+  #else
+  #define DEBUGOUTPUT_ARRAY( A, FORMAT, INDEX )
+  #endif
+  
+  #ifdef DEBUG
+  #define DEBUGOUTPUT( A, FORMAT ) do{ \
+  char TMPSTRING[100]; sprintf( TMPSTRING, "%s = %s\n", #A, FORMAT ); \
+  printf0( TMPSTRING, A ); }while(0)
+  #else
+  #define DEBUGOUTPUT( A, FORMAT )
+  #endif
+
+  #include "vectorization_control.h"
+  #include "threading.h"
+
+  // enumerations
+  enum { _EVEN, _ODD };
+  enum { _NO_DEFAULT_SET, _DEFAULT_SET };
+  enum { _NO_REORDERING, _REORDER };
+  enum { _ADD, _COPY };
+  enum { _ORDINARY, _SCHWARZ, _ODDEVEN };
+  enum { _RES, _NO_RES };
+  enum { _STANDARD, _LIME }; //formats
+  enum { _READ, _WRITE };
+  enum { _NO_SHIFT };
+  enum { _BTWN_ORTH = 20 };
+  enum { _GLOBAL_FGMRES, _K_CYCLE, _COARSE_GMRES, _SMOOTHER };
+  enum { _COARSE_GLOBAL };
+  enum { _FULL_SYSTEM, _EVEN_SITES, _ODD_SITES };
+  enum { _LEFT, _RIGHT, _NOTHING };
+  enum { _PERIODIC, _ANTIPERIODIC, _TWISTED, _DIRICHLET };
+  enum { _GIP, _PIP, _LA2, _LA6, _LA8, _LA, _CPY, _SET, _PR, _SC, _NC, _SM, _OP_COMM, _OP_IDLE, _ALLR, _GD_COMM, _GD_IDLE, _GRAM_SCHMIDT, _GRAM_SCHMIDT_ON_AGGREGATES,
+      _SM1, _SM2, _SM3, _SM4, _SMALL1, _SMALL2, _NUM_PROF }; // _NUM_PROF has always to be the last constant!
+  enum { _VTS = 20 };
+  enum { _TRCKD_VAL, _STP_TIME, _SLV_ITER, _SLV_TIME, _CRS_ITER, _CRS_TIME, _SLV_ERR, _CGNR_ERR, _NUM_OPTB };
+  
+  typedef struct block_struct {
+    int start, color, no_comm, *bt;
+  } block_struct;
+  
+  #include "main_pre_def_double.h"
+  
+  extern complex_double _COMPLEX_double_ONE;
+  extern complex_double _COMPLEX_double_ZERO;
+  extern complex_double _COMPLEX_double_MINUS_ONE;
+  
+  typedef struct plot_table_line {
+    
+    double values[_NUM_OPTB];
+    struct plot_table_line *next;
+    
+  } plot_table_line;
+  
+  typedef struct var_table_entry {
+    
+    void *pt;
+    char name[STRINGLENGTH];
+    char datatype[20];
+    struct var_table_entry *next;
+    
+  } var_table_entry;
+  
+  typedef struct var_table {
+    
+    int evaluation, multiplicative, shift_update, re_setup,
+        track_error, track_cgn_error, average_over;
+    char scan_var[STRINGLENGTH];
+    double start_val, end_val, step_size, *output_table[6];
+    var_table_entry *entry, *iterator;
+    plot_table_line *p, *p_end;
+    
+  } var_table;
+  
+  typedef struct confbuffer_struct {
+    
+    double *data;
+    struct confbuffer_struct *next;
+    
+  } confbuffer_struct;
+  
+  typedef struct {
+    
+    gmres_double_struct dp;
+    
+  } gmres_MP_struct;
+
+  typedef struct level_struct {    
+    
+    // distributed: non-idling processes of previos level
+    // gathered: non-idling processes of current level
+    
+    // distributed
+    operator_double_struct op_double;
+    // odd_even
+    operator_double_struct oe_op_double;
+    // gathered / schwarz
+    schwarz_double_struct s_double;
+    // interpolation / aggregation
+    interpolation_double_struct is_double;
+    // gathering parameters and buffers
+    gathering_double_struct gs_double;
+    // k cycle
+    gmres_double_struct p_double;
+    // gmres as a smoother
+    gmres_double_struct sp_double;
+    // dummy gmres struct
+    gmres_double_struct dummy_p_double;
+    //profiling
+    profiling_double_struct prof_double;
+
+    // hutchinson struct
+    //hutchinson_float_struct h_float;
+    hutchinson_double_struct h_double;
+    
+    // communication
+    MPI_Request *reqs;
+    int parent_rank, idle, neighbor_rank[8], num_processes, num_processes_dir[4];
+    // lattice
+    int *global_lattice;
+    int *local_lattice;
+    int *block_lattice;
+    int num_eig_vect;
+    int num_parent_eig_vect;
+    int coarsening[4];
+    int global_splitting[4];
+    int periodic_bc[4];
+    int comm_offset[4];
+    // degrees of freedom on a site
+    // 12 on fine lattice (i.e., complex d.o.f.)
+    // 2*num_eig_vect on coarser lattices
+    int num_lattice_site_var;
+    int level;
+    int depth;
+    // number of sites in local volume + ghost shell (either fw or bw)
+    int num_lattice_sites;
+    // number of sites in local volume
+    int num_inner_lattice_sites;
+    int num_boundary_sites[4];
+    // complex d.o.f. in local volume + ghost shell = num_lattice_sites * num_lattice_site_var
+    long int vector_size;
+    // complex d.o.f. in local volume = num_inner_lattice_sites * num_lattice_site_var
+    long int inner_vector_size;
+    long int schwarz_vector_size;
+    int D_size;
+    int clover_size;
+    int block_size;
+    // buffer vectors
+    vector_double vbuf_double[9], sbuf_double[2];
+    // storage + daggered-operator bufferes
+    vector_double x;
+    // local solver parameters
+    double tol, relax_fac;
+    int n_cy, post_smooth_iter, block_iter, setup_iter;
+    
+    // next coarser level
+    struct level_struct *next_level;
+
+#if defined(GCRODR) || defined(POLYPREC)
+    // 'bool', if on H will be copied
+    int dup_H;
+#endif
+  } level_struct;
+
+
+  typedef struct global_struct {
+    
+    FILE *logfile;
+    
+    gmres_double_struct p;
+    gmres_MP_struct p_MP;
+    operator_double_struct op_double;
+
+    // communication
+    MPI_Comm comm_cart;
+    MPI_Group global_comm_group;
+    MPI_Request sreqs[8], rreqs[8];
+    int num_processes, my_rank, my_coords[4], tv_io_single_file, num_openmp_processes;
+    // string buffers
+    char in[STRINGLENGTH], in_clov[STRINGLENGTH], source_list[STRINGLENGTH], tv_io_file_name[STRINGLENGTH];
+    // geometry, method parameters
+    int num_levels, num_desired_levels, process_grid[4], in_format,
+        **global_lattice, **local_lattice, **block_lattice, 
+        *post_smooth_iter, *block_iter, *setup_iter, *ncycle,
+        method, odd_even, rhs, propagator_coords[4],
+        interpolation, randomize, *num_eig_vect, num_coarse_eig_vect, kcycle, mixed_precision,
+        restart, max_restart, kcycle_restart, kcycle_max_restart, coarse_iter, coarse_restart;
+    double tol, coarse_tol, kcycle_tol, csw, rho, *relax_fac;
+#ifdef GCRODR
+    int gcrodr_k;
+    int gcrodr_upd_itrs;
+#endif
+
+#ifdef POLYPREC
+    int polyprec_d;
+#endif
+
+#ifdef BLOCK_JACOBI
+    int local_polyprec_d;
+#endif
+
+#ifdef MUMPS_ADDS
+    double mumps_drop_tol;
+#endif
+
+    // profiling, analysis, output
+    int coarse_iter_count, iter_count, iterator, print, conf_flag, setup_flag, in_setup;
+    double coarse_time, prec_time, *output_table[8], cur_storage, max_storage, total_time,
+      plaq_hopp, plaq_clov, norm_res, plaq, bicgstab_tol, twisted_bc[4], test;
+
+    double coarsest_time;
+
+    double m0, setup_m0;
+
+#ifdef HAVE_TM
+    // twisted mass parameters
+    int downprop;
+    double mu, setup_mu, mu_odd_shift, mu_even_shift, *mu_factor;
+#endif
+
+#ifdef HAVE_TM1p1           
+    int n_flavours;
+    double epsbar, epsbar_ig5_odd_shift, epsbar_ig5_even_shift, *epsbar_factor;
+#endif
+
+    // index functions for external usage
+    int (*conf_index_fct)(), (*vector_index_fct)();
+    int *odd_even_table;
+    int (*Cart_rank)(MPI_Comm comm, const int coords[], int *rank);
+    int (*Cart_coords)(MPI_Comm comm, int rank, int maxdims, int coords[]);
+    
+    // bc: 0 dirichlet, 1 periodic, 2 anti-periodic
+    int bc; 
+    
+    complex_double **gamma;
+    var_table vt;
+
+    // mostly useful, as of now, for PP and GCRODR
+    int on_solve;
+
+    int low_level_meas;
+    double avg_b1;
+    double avg_b2;
+    double avg_crst;
+
+#ifdef PERS_COMMS
+    // use persistent communications at the coarsest level
+    int use_pers_comms1,use_pers_comms2;
+    int pers_comms_id1,pers_comms_id2;
+
+    int pers_comms_nrZs,pers_comms_nrZas,pers_comms_nrZxs;
+
+    // for plus hopping (plus doesn't mean +mu here)
+    MPI_Request* pers_comms_recvrs_plus[8];
+    MPI_Request* pers_comms_sendrs_plus[8];
+    // for minus hopping
+    MPI_Request* pers_comms_recvrs_minus[8];
+    MPI_Request* pers_comms_sendrs_minus[8];
+#endif
+
+    int if_rademacher;
+
+#ifdef MUMPS_ADDS
+    DMUMPS_STRUC_C mumps_id;
+#endif
+
+  } global_struct;
+
+  extern global_struct g;
+  
+  static inline void printf0( char* format, ... ) {
+    START_MASTER(no_threading)
+    if ( g.my_rank == 0 && g.print >= 0 ) {
+      va_list argpt;
+      va_start(argpt,format);
+      vprintf(format,argpt);
+#ifdef WRITE_LOGFILE
+      vfprintf(g.logfile,format,argpt);
+      fflush(g.logfile);
+#endif
+      va_end(argpt);
+      fflush(0);
+    }
+    END_MASTER(no_threading)
+  }
+
+  static inline void printf00( char* format, ... ) {
+    if ( g.my_rank == 0 && g.print >= 0 ) {
+      va_list argpt;
+      va_start(argpt,format);
+      vprintf(format,argpt);
+#ifdef WRITE_LOGFILE
+      vfprintf(g.logfile,format,argpt);
+      fflush(g.logfile);
+#endif
+      va_end(argpt);
+      fflush(0);
+    }
+  }
+
+  static inline void warning( char* format, ... ) {
+    printf("\x1b[31mwarning, rank %d: ", g.my_rank);
+    va_list argpt;
+    va_start(argpt,format);
+    vprintf(format,argpt);
+#ifdef WRITE_LOGFILE
+    vfprintf(g.logfile,format,argpt);
+    fflush(g.logfile);
+#endif
+    va_end(argpt);
+    printf("\x1b[0m");
+    fflush(0);
+  }
+
+  static inline void warning0( char* format, ... ) {
+    if ( g.my_rank == 0 && g.print >= 0 ) {
+      printf("\x1b[31mwarning: ");
+      va_list argpt;
+      va_start(argpt,format);
+      vprintf(format,argpt);
+#ifdef WRITE_LOGFILE
+      vfprintf(g.logfile,format,argpt);
+      fflush(g.logfile);
+#endif
+      va_end(argpt);
+      printf("\x1b[0m");
+      fflush(0);
+    }
+  }
+  
+  static inline void error0( char* format, ... ) {
+    if ( g.my_rank == 0 ) {
+      printf("\x1b[31merror: ");
+      va_list argpt;
+      va_start(argpt,format);
+      vprintf(format,argpt);
+#ifdef WRITE_LOGFILE
+      vfprintf(g.logfile,format,argpt);
+      fflush(g.logfile);
+#endif
+      va_end(argpt);
+      printf("\x1b[0m");
+      fflush(0);
+      MPI_Abort( MPI_COMM_WORLD, 0 );
+    }
+  }
+  
+#endif
+
+// functions
+#include "clifford.h"
+
+#ifdef SSE
+#include "vectorization_dirac_double.h"
+#include "blas_vectorized.h"
+#include "sse_blas_vectorized.h"
+#include "sse_complex_double_intrinsic.h"
+#include "sse_coarse_operator_double.h"
+#include "sse_linalg_double.h"
+#include "sse_interpolation_double.h"
+#else
+//no intrinsics
+#include "interpolation_double.h"
+#endif
+
+#include "data_double.h"
+#include "data_layout.h"
+#include "io.h"
+#include "init.h"
+#include "operator_double.h"
+#include "dirac.h"
+#include "dirac_double.h"
+#include "oddeven_double.h"
+#include "linalg.h"
+#include "linalg_double.h"
+#include "ghost_double.h"
+#include "linsolve_double.h"
+#include "linsolve.h"
+#include "preconditioner.h"
+#include "vcycle_double.h"
+#include "solver_analysis.h"
+#include "top_level.h"
+#include "ghost.h"
+#include "init_double.h"
+#include "schwarz_double.h"
+#include "setup_double.h"
+#include "coarsening_double.h"
+#include "gathering_double.h"
+#include "coarse_operator_double.h"
+#include "coarse_oddeven_double.h"
+#include "var_table.h"
+#include "main_post_def_double.h"
+
+//#include "hutchinson_float.h"
+#include "hutchinson_double.h"
+
+#ifdef HAVE_LIME
+#include <lime.h>
+#include <lime_config.h>
+//#include <dcap-overload.h>
+#include <lime_defs.h>
+#include <lime_header.h>
+#include <lime_writer.h>
+#include <lime_reader.h>
+#endif
+#include "lime_io.h"
+
+#ifdef GCRODR
+  #include "gcrodr_double.h"
+#endif
+
+#ifdef BLOCK_JACOBI
+  #include "block_jacobi_double.h"
+  #include "local_polyprec_double.h"
+#endif
+
+#if defined(GCRODR) || defined(POLYPREC)
+  #include <lapacke.h>
+#ifdef GCRODR
+  //#include <mkl_scalapack.h>
+  //#include <mkl_blacs.h>
+  //#include <mkl_pblas.h>
+#endif
+  #include "lapackwrap_double.h"
+#endif
+
+#ifdef POLYPREC
+  #include "polyprec_double.h"
+#endif
+
+#ifdef MUMPS_ADDS
+  #include "mumps_double.h"
+  //#include "mumps_float.h"
+#endif
