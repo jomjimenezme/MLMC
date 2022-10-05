@@ -5,6 +5,8 @@
 
 void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threading );
 void bp_qr_double( level_struct* lx, struct Thread* threading );
+void test_powerit_quality( level_struct* lx, struct Thread* threading );
+
 
 
 void block_powerit_double_init_and_alloc( char* op_name, int depth_bp_op, int nr_vecs, int nr_bpi_cycles, double bp_tol, level_struct* l, struct Thread* threading ){
@@ -24,29 +26,22 @@ void block_powerit_double_init_and_alloc( char* op_name, int depth_bp_op, int nr
   lx->powerit.bp_tol = bp_tol;
   lx->powerit.nr_cycles = nr_bpi_cycles;
 
+  lx->powerit.gs_buffer = NULL;
+  MALLOC( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
+
   lx->powerit.vecs = NULL;
   MALLOC(lx->powerit.vecs, complex_double*, lx->powerit.nr_vecs );
   lx->powerit.vecs[0] = NULL;
-  MALLOC(lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  MALLOC( lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
   for( i=1;i<lx->powerit.nr_vecs;i++ ){
     lx->powerit.vecs[i] = lx->powerit.vecs[0] + i*lx->vector_size;
   }
 
   lx->powerit.vecs_buff1 = NULL;
-  MALLOC(lx->powerit.vecs_buff1, complex_double*, lx->powerit.nr_vecs );
-  lx->powerit.vecs_buff1[0] = NULL;
-  MALLOC(lx->powerit.vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-  for( i=1;i<lx->powerit.nr_vecs;i++ ){
-    lx->powerit.vecs_buff1[i] = lx->powerit.vecs_buff1[0] + i*lx->vector_size;
-  }
+  MALLOC( lx->powerit.vecs_buff1, complex_double, lx->vector_size );
 
   lx->powerit.vecs_buff2 = NULL;
-  MALLOC(lx->powerit.vecs_buff2, complex_double*, lx->powerit.nr_vecs );
-  lx->powerit.vecs_buff2[0] = NULL;
-  MALLOC(lx->powerit.vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-  for( i=1;i<lx->powerit.nr_vecs;i++ ){
-    lx->powerit.vecs_buff2[i] = lx->powerit.vecs_buff2[0] + i*lx->vector_size;
-  }
+  MALLOC( lx->powerit.vecs_buff2, complex_double, lx->vector_size );
 
   END_MASTER(threading)
 }
@@ -65,8 +60,10 @@ void block_powerit_double_free( char* op_name, int depth_bp_op, level_struct* l,
   }
 
   FREE(lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-  FREE(lx->powerit.vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-  FREE(lx->powerit.vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  FREE(lx->powerit.vecs_buff1, complex_double, lx->vector_size );
+  FREE(lx->powerit.vecs_buff2, complex_double, lx->vector_size );
+
+  FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
 
   END_MASTER(threading)
 }
@@ -94,7 +91,10 @@ void block_powerit_double( char* op_name, int depth_bp_op, level_struct *l, stru
 
     bp_qr_double( lx, threading );
   }
+
+  test_powerit_quality( lx, threading );
 }
+
 
 
 // auxiliary functions
@@ -120,12 +120,15 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
 
   if( strcmp(op_name,"non-difference")==0 ){
     // TODO : include threading for setting some values, in this non-difference case
-  
+    
+    int start, end;
     double buff_tol;
     complex_double* buff_b;
     complex_double* buff_x;
     gmres_double_struct* px;
     if( lx->depth==0 ){ px = &(g.p); } else { px = &(lx->p_double); }
+
+    compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
 
     buff_tol = px->tol;
     px->tol = lx->powerit.bp_tol;
@@ -134,9 +137,12 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
 
     for( i=0;i<lx->powerit.nr_vecs;i++ ){
       px->b = lx->powerit.vecs[i];
-      px->x = lx->powerit.vecs_buff1[i];
+      px->x = lx->powerit.vecs_buff1;
 
       fgmres_double( px, lx, threading );
+      
+      // TODO : copy px->x into lx->powerit.vecs[i]
+      vector_double_copy( lx->powerit.vecs[i], px->x, start, end, lx );
     }
 
     // restore values
@@ -205,19 +211,19 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
       END_MASTER(threading)
       if( lx->depth==0 ){
         interpolate3_double( lx->sbuf_double[1], pxc->x, lx, threading );
-        trans_back_double( lx->powerit.vecs_buff2[i], lx->sbuf_double[1], lx->s_double.op.translation_table, lx, threading );
+        trans_back_double( lx->powerit.vecs_buff2, lx->sbuf_double[1], lx->s_double.op.translation_table, lx, threading );
       } else {
-        interpolate3_double( lx->powerit.vecs_buff2[i], pxc->x, lx, threading );
+        interpolate3_double( lx->powerit.vecs_buff2, pxc->x, lx, threading );
       }
 
       // fine
       START_MASTER(threading)
-      px->x = lx->powerit.vecs_buff1[i];
+      px->x = lx->powerit.vecs_buff1;
       END_MASTER(threading)
       SYNC_CORES(threading)
       fgmres_double( px, lx, threading );
 
-      vector_double_minus( px->x, px->x, lx->powerit.vecs_buff2[i], start, end, lx );
+      vector_double_minus( lx->powerit.vecs[i], px->x, lx->powerit.vecs_buff2, start, end, lx );
 
       START_MASTER(threading)
       printf0(".");
@@ -237,13 +243,6 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
     error0("Unrecognized operator to apply block power iteration\n");
   }
 
-  // swap pointers
-  START_MASTER(threading)
-  complex_double* buff = lx->powerit.vecs_buff1[0];
-  lx->powerit.vecs_buff1[0] = lx->powerit.vecs[0];
-  lx->powerit.vecs[0] = buff;
-  END_MASTER(threading)
-
   // apply gamma5 to the final result
   {
     for( i=0;i<lx->powerit.nr_vecs;i++ ){
@@ -260,7 +259,21 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
   }
 }
 
+
 void bp_qr_double( level_struct* lx, struct Thread* threading ){
 
-  printf0("QR is under construction ...\n");
+  gram_schmidt_double( lx->powerit.vecs, lx->powerit.gs_buffer, 0, lx->powerit.nr_vecs, lx, threading );
+}
+
+
+void test_powerit_quality( level_struct* lx, struct Thread* threading ){
+
+  int i;
+  
+  for( i=0;i<lx->powerit.nr_vecs;i++ ){
+    // compute the Rayleigh quotient
+    double rq;
+    
+    // TODO : finish    
+  }
 }

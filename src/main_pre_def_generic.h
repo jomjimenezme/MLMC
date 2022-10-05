@@ -277,8 +277,10 @@
     int nr_vecs, nr_cycles;
     double bp_tol;
     vector_double* vecs;
-    vector_double* vecs_buff1;
-    vector_double* vecs_buff2;
+    vector_double vecs_buff1;
+    vector_double vecs_buff2;
+    // buffer to use in Gram Schmidt orthogonalizations
+    complex_double* gs_buffer;
   } powerit_double_struct;
   
   #ifdef PROFILING
