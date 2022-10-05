@@ -5,7 +5,7 @@
 
 void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threading );
 void bp_qr_double( level_struct* lx, struct Thread* threading );
-void test_powerit_quality( level_struct* lx, struct Thread* threading );
+void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threading );
 
 
 
@@ -92,7 +92,7 @@ void block_powerit_double( char* op_name, int depth_bp_op, level_struct *l, stru
     bp_qr_double( lx, threading );
   }
 
-  test_powerit_quality( lx, threading );
+  test_powerit_quality( op_name, lx, threading );
 }
 
 
@@ -141,7 +141,6 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
 
       fgmres_double( px, lx, threading );
       
-      // TODO : copy px->x into lx->powerit.vecs[i]
       vector_double_copy( lx->powerit.vecs[i], px->x, start, end, lx );
     }
 
@@ -244,19 +243,19 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
   }
 
   // apply gamma5 to the final result
-  {
-    for( i=0;i<lx->powerit.nr_vecs;i++ ){
-      if( lx->depth==0 ){
-        gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
-      }
-      else{
-        int startg5, endg5;
-        compute_core_start_end_custom(0, lx->inner_vector_size, &startg5, &endg5, lx, threading, lx->num_lattice_site_var );
-        coarse_gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], startg5, endg5, lx );
-      }
-    }
-    SYNC_CORES(threading)
-  }
+  //{
+  //  for( i=0;i<lx->powerit.nr_vecs;i++ ){
+  //    if( lx->depth==0 ){
+  //      gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
+  //    }
+  //    else{
+  //      int startg5, endg5;
+  //      compute_core_start_end_custom(0, lx->inner_vector_size, &startg5, &endg5, lx, threading, lx->num_lattice_site_var );
+  //      coarse_gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], startg5, endg5, lx );
+  //    }
+  //  }
+  //  SYNC_CORES(threading)
+  //}
 }
 
 
@@ -266,14 +265,83 @@ void bp_qr_double( level_struct* lx, struct Thread* threading ){
 }
 
 
-void test_powerit_quality( level_struct* lx, struct Thread* threading ){
+void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threading ){
 
-  int i;
-  
+  int i, start, end;
+  complex_double** vecs_buff1;
+  complex_double** vecs_buff2;
+
+  gmres_double_struct* px;
+  if( lx->depth==0 ){ px = &(g.p); } else { px = &(lx->p_double); }
+  compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
+
+  vecs_buff1 = NULL;
+  START_MASTER(threading)
+  MALLOC( vecs_buff1, complex_double*, lx->powerit.nr_vecs );
+  vecs_buff1[0] = NULL;
+  MALLOC( vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  for( i=1;i<lx->powerit.nr_vecs;i++ ){
+    vecs_buff1[i] = vecs_buff1[0] + i*lx->vector_size;
+  }
+  ((vector_double *)threading->workspace)[0] = vecs_buff1;
+  END_MASTER(threading)
+  SYNC_CORES(threading)
+  vecs_buff1 = ((vector_double *)threading->workspace)[0];
+
+  vecs_buff2 = NULL;
+  START_MASTER(threading)
+  MALLOC( vecs_buff2, complex_double*, lx->powerit.nr_vecs );
+  vecs_buff2[0] = NULL;
+  MALLOC( vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  for( i=1;i<lx->powerit.nr_vecs;i++ ){
+    vecs_buff2[i] = vecs_buff2[0] + i*lx->vector_size;
+  }
+  ((vector_double *)threading->workspace)[0] = vecs_buff1;
+  END_MASTER(threading)
+  SYNC_CORES(threading)
+  vecs_buff1 = ((vector_double *)threading->workspace)[0];
+
+  // backup of lx->powerit.vecs
+  for( i=0;i<lx->powerit.nr_vecs;i++ ){
+    vector_double_copy( vecs_buff1[i], lx->powerit.vecs[i], start, end, lx );
+  }
+
+  // apply the operator
+  bp_op_double_apply( op_name, lx, threading );
+
+  // swap pointers
+  START_MASTER(threading)
+  {
+    complex_double* buff_ptr = lx->powerit.vecs[0];
+    lx->powerit.vecs[0] = vecs_buff1[0];
+    vecs_buff1[0] = buff_ptr;
+  }
+  END_MASTER(threading)
+
   for( i=0;i<lx->powerit.nr_vecs;i++ ){
     // compute the Rayleigh quotient
-    double rq;
+    complex_double rq;
+    rq = global_inner_product_double( lx->powerit.vecs[i], vecs_buff1[i], px->v_start, px->v_end, lx, threading );
+
+    // print the Rayleigh quotient
+    START_MASTER(threading)
+    printf0( "Rayleigh quotient = %.16f+i%.16f \t",CSPLIT(rq) );
+    END_MASTER(threading)
+
+    // compute the eigenvalue residual
+    vector_double_scale( vecs_buff2[i], lx->powerit.vecs[i], rq, start, end, lx );
+    vector_double_minus( vecs_buff1[i], vecs_buff1[i], vecs_buff2[i], start, end, lx );
+    double resx = global_norm_double( vecs_buff1[i], 0, lx->inner_vector_size, lx, threading );
     
-    // TODO : finish    
+    // print the residuals
+    START_MASTER(threading)
+    printf0( "Eigenvalue residual = %.16f\n",resx );
+    END_MASTER(threading)
   }
+
+  START_MASTER(threading)
+  FREE( vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  FREE( vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  END_MASTER(threading)
+
 }

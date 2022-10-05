@@ -202,7 +202,7 @@ int main( int argc, char **argv ) {
     // number of block power iteration vectors
     int nr_bp_vecs = 24;
     // relative-residual tolerance for the operators in power iteration
-    double bp_tol = 1.0e-4;
+    double bp_tol = 1.0e-5;
     // number of power iteration cycles
     int nr_bpi_cycles = 5;
 
