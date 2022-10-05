@@ -103,8 +103,23 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
 
   int i;
 
+  // apply gamma5 before either operator
+  {
+    for( i=0;i<lx->powerit.nr_vecs;i++ ){
+      if( lx->depth==0 ){
+        gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
+      }
+      else{
+        int startg5, endg5;
+        compute_core_start_end_custom(0, lx->inner_vector_size, &startg5, &endg5, lx, threading, lx->num_lattice_site_var );
+        coarse_gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], startg5, endg5, lx );
+      }
+    }
+    SYNC_CORES(threading)
+  }
+
   if( strcmp(op_name,"non-difference")==0 ){
-    // TODO : include threading for setting some values
+    // TODO : include threading for setting some values, in this non-difference case
   
     double buff_tol;
     complex_double* buff_b;
@@ -131,12 +146,16 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
   } else if( strcmp(op_name,"difference")==0 ) {
     double buff_tol;
     int buff_print1, buff_print2;
+    int start, end;
+
     complex_double* buff_b;
     complex_double* buff_x;
     gmres_double_struct* px;
     if( lx->depth==0 ){ px = &(g.p); } else { px = &(lx->p_double); }
     level_struct* lxc = lx->next_level;
     gmres_double_struct* pxc = &(lxc->p_double);
+
+    compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
 
     // fine
     buff_tol = px->tol;
@@ -198,8 +217,6 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
       SYNC_CORES(threading)
       fgmres_double( px, lx, threading );
 
-      int start, end;
-      compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
       vector_double_minus( px->x, px->x, lx->powerit.vecs_buff2[i], start, end, lx );
 
       START_MASTER(threading)
@@ -226,6 +243,21 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
   lx->powerit.vecs_buff1[0] = lx->powerit.vecs[0];
   lx->powerit.vecs[0] = buff;
   END_MASTER(threading)
+
+  // apply gamma5 to the final result
+  {
+    for( i=0;i<lx->powerit.nr_vecs;i++ ){
+      if( lx->depth==0 ){
+        gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
+      }
+      else{
+        int startg5, endg5;
+        compute_core_start_end_custom(0, lx->inner_vector_size, &startg5, &endg5, lx, threading, lx->num_lattice_site_var );
+        coarse_gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], startg5, endg5, lx );
+      }
+    }
+    SYNC_CORES(threading)
+  }
 }
 
 void bp_qr_double( level_struct* lx, struct Thread* threading ){
