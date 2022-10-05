@@ -272,6 +272,14 @@
     double count[_NUM_PROF];
     char name[_NUM_PROF][50];
   } profiling_double_struct;
+
+  typedef struct {
+    int nr_vecs, nr_cycles;
+    double bp_tol;
+    vector_double* vecs;
+    vector_double* vecs_buff1;
+    vector_double* vecs_buff2;
+  } powerit_double_struct;
   
   #ifdef PROFILING
     #define PROF_double_START_UNTHREADED( TYPE ) do{ l->prof_double.time[TYPE] -= MPI_Wtime(); }while(0)

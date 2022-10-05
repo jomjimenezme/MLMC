@@ -340,6 +340,8 @@
     
     // next coarser level
     struct level_struct *next_level;
+    
+    powerit_double_struct powerit;
 
 #if defined(GCRODR) || defined(POLYPREC)
     // 'bool', if on H will be copied
@@ -575,6 +577,7 @@
 #include "coarse_oddeven_double.h"
 #include "var_table.h"
 #include "main_post_def_double.h"
+#include "powerit_double.h"
 
 //#include "hutchinson_float.h"
 #include "hutchinson_double.h"
