@@ -9,7 +9,7 @@ void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threa
 
 
 
-void block_powerit_double_init_and_alloc( char* op_name, int depth_bp_op, int nr_vecs, int nr_bpi_cycles, double bp_tol, level_struct* l, struct Thread* threading ){
+void block_powerit_double_init_and_alloc( char* spec_type, char* op_name, int depth_bp_op, int nr_vecs, int nr_bpi_cycles, double bp_tol, level_struct* l, struct Thread* threading ){
 
   START_MASTER(threading)
 
@@ -25,6 +25,8 @@ void block_powerit_double_init_and_alloc( char* op_name, int depth_bp_op, int nr
   lx->powerit.nr_vecs = nr_vecs;
   lx->powerit.bp_tol = bp_tol;
   lx->powerit.nr_cycles = nr_bpi_cycles;
+
+  strcpy( lx->powerit.spec_type, spec_type );
 
   lx->powerit.gs_buffer = NULL;
   MALLOC( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
@@ -83,6 +85,7 @@ void block_powerit_double( char* op_name, int depth_bp_op, level_struct *l, stru
   START_LOCKED_MASTER(threading)
   vector_double_define_random( lx->powerit.vecs[0], 0, lx->powerit.nr_vecs*lx->vector_size, lx );
   END_LOCKED_MASTER(threading)
+  SYNC_CORES(threading)
 
   for( i=0;i<lx->powerit.nr_cycles;i++ ){
     // apply the operator on the vectors ...
@@ -92,7 +95,23 @@ void block_powerit_double( char* op_name, int depth_bp_op, level_struct *l, stru
     bp_qr_double( lx, threading );
   }
 
+  // in the SVs case, this tests the eigenvectors coming out of the Hermitian problem
   test_powerit_quality( op_name, lx, threading );
+
+  // apply gamma5 to the final result
+  if( strcmp(lx->powerit.spec_type,"SVs")==0 ){
+    for( i=0;i<lx->powerit.nr_vecs;i++ ){
+      if( lx->depth==0 ){
+        gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
+      }
+      else{
+        int startg5, endg5;
+        compute_core_start_end_custom(0, lx->inner_vector_size, &startg5, &endg5, lx, threading, lx->num_lattice_site_var );
+        coarse_gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], startg5, endg5, lx );
+      }
+    }
+    SYNC_CORES(threading)
+  }
 }
 
 
@@ -104,7 +123,7 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
   int i;
 
   // apply gamma5 before either operator
-  {
+  if( strcmp(lx->powerit.spec_type,"SVs")==0 ){
     for( i=0;i<lx->powerit.nr_vecs;i++ ){
       if( lx->depth==0 ){
         gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
@@ -131,23 +150,37 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
     compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
 
     buff_tol = px->tol;
-    px->tol = lx->powerit.bp_tol;
     buff_b = px->b;
     buff_x = px->x;
 
+    START_MASTER(threading)
+    px->tol = lx->powerit.bp_tol;
+    END_MASTER(threading)
+
     for( i=0;i<lx->powerit.nr_vecs;i++ ){
+      START_MASTER(threading)
       px->b = lx->powerit.vecs[i];
       px->x = lx->powerit.vecs_buff1;
+      END_MASTER(threading)
 
       fgmres_double( px, lx, threading );
       
       vector_double_copy( lx->powerit.vecs[i], px->x, start, end, lx );
+
+      START_MASTER(threading)
+      printf0(".");
+      END_MASTER(threading)
     }
+    START_MASTER(threading)
+    printf0("\n");
+    END_MASTER(threading)
 
     // restore values
+    START_MASTER(threading)
     px->tol = buff_tol;
     px->b = buff_b;
     px->x = buff_x;
+    END_MASTER(threading)
   } else if( strcmp(op_name,"difference")==0 ) {
     double buff_tol;
     int buff_print1, buff_print2;
@@ -241,26 +274,12 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
   } else {
     error0("Unrecognized operator to apply block power iteration\n");
   }
-
-  // apply gamma5 to the final result
-  //{
-  //  for( i=0;i<lx->powerit.nr_vecs;i++ ){
-  //    if( lx->depth==0 ){
-  //      gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
-  //    }
-  //    else{
-  //      int startg5, endg5;
-  //      compute_core_start_end_custom(0, lx->inner_vector_size, &startg5, &endg5, lx, threading, lx->num_lattice_site_var );
-  //      coarse_gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], startg5, endg5, lx );
-  //    }
-  //  }
-  //  SYNC_CORES(threading)
-  //}
 }
 
 
 void bp_qr_double( level_struct* lx, struct Thread* threading ){
 
+  gram_schmidt_double( lx->powerit.vecs, lx->powerit.gs_buffer, 0, lx->powerit.nr_vecs, lx, threading );
   gram_schmidt_double( lx->powerit.vecs, lx->powerit.gs_buffer, 0, lx->powerit.nr_vecs, lx, threading );
 }
 
@@ -312,9 +331,9 @@ void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threa
   // swap pointers
   START_MASTER(threading)
   {
-    complex_double* buff_ptr = lx->powerit.vecs[0];
-    lx->powerit.vecs[0] = vecs_buff1[0];
-    vecs_buff1[0] = buff_ptr;
+    complex_double** buff_ptr = lx->powerit.vecs;
+    lx->powerit.vecs = vecs_buff1;
+    vecs_buff1 = buff_ptr;
   }
   END_MASTER(threading)
 
@@ -322,6 +341,8 @@ void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threa
     // compute the Rayleigh quotient
     complex_double rq;
     rq = global_inner_product_double( lx->powerit.vecs[i], vecs_buff1[i], px->v_start, px->v_end, lx, threading );
+    double norm = global_norm_double( lx->powerit.vecs[i], 0, lx->inner_vector_size, lx, threading );
+    rq /= norm;
 
     // print the Rayleigh quotient
     START_MASTER(threading)
@@ -343,5 +364,4 @@ void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threa
   FREE( vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
   FREE( vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
   END_MASTER(threading)
-
 }

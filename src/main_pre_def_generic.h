@@ -281,6 +281,7 @@
     vector_double vecs_buff2;
     // buffer to use in Gram Schmidt orthogonalizations
     complex_double* gs_buffer;
+    char spec_type[50];
   } powerit_double_struct;
   
   #ifdef PROFILING

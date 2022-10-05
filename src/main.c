@@ -200,17 +200,22 @@ int main( int argc, char **argv ) {
     // depth at which to apply power iteration
     int depth_bp_op = 1;
     // number of block power iteration vectors
-    int nr_bp_vecs = 24;
+    int nr_bp_vecs = 35;
     // relative-residual tolerance for the operators in power iteration
-    double bp_tol = 1.0e-5;
+    double bp_tol = 1.0e-4;
     // number of power iteration cycles
-    int nr_bpi_cycles = 5;
+    int nr_bpi_cycles = 2;
+    // this indicates whether we want eigenvectors or right singular vectors, with possible values EVs or SVs
+    char spec_type[50] = "EVs";
 
-    // IMPORTANT : always call this operation with the finest-level l
+    // IMPORTANT :
+    //		   -- always call this operation with the finest-level l
+    //		   -- after calling power iteration, the result is in lx->powerit.vecs, with lx
+    //		      the level struct of the chosen level
     if( strcmp(op_name,"difference") && depth_bp_op>g.num_levels ){
       error0("The depth cannot be larger than the total number of levels\n");
     }
-    block_powerit_double_init_and_alloc( op_name, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, &l, &threading );
+    block_powerit_double_init_and_alloc( spec_type, op_name, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, &l, &threading );
     block_powerit_double( op_name, depth_bp_op, &l, &threading );
     block_powerit_double_free( op_name, depth_bp_op, &l, &threading );
 
