@@ -79,6 +79,18 @@ int main( int argc, char **argv ) {
   {
     g.if_rademacher=0;
 
+    //for( int i=0;i<g.num_levels;i++ ){
+    //  printf0( "g.trace_deflation_type[i] = %d\n",g.trace_deflation_type[i] );
+    //  printf0( "g.trace_deflation_nr_vectors[i] = %d\n",g.trace_deflation_nr_vectors[i] );
+    //  printf0( "g.trace_powerit_solver_tol[i] = %f\n",g.trace_powerit_solver_tol[i] );
+    //  printf0( "g.trace_powerit_cycles[i] = %d\n",g.trace_powerit_cycles[i] );
+    //  printf0( "g.trace_powerit_spectrum_type[i] = %d\n",g.trace_powerit_spectrum_type[i] );
+    //}
+    //char op_name[50];
+    //strcpy( op_name,"difference" );
+    //printf0( "comparison = %d\n",strcmp( op_name,"non-difference" ) );
+    //exit(0);
+
     struct Thread threading;
     setup_threading(&threading, commonthreaddata, &l);
     setup_no_threading(no_threading, &l);
@@ -87,6 +99,8 @@ int main( int argc, char **argv ) {
     method_setup( NULL, &l, &threading );
     // iterative phase
     method_update( l.setup_iter, &l, &threading );
+    
+    block_powerit_driver_double( &l, &threading );
     
     /*
     //init hutchinson
@@ -188,37 +202,6 @@ int main( int argc, char **argv ) {
    
     hutchinson_diver_double_free( &l, &threading );
     */
-
-
-    // calling block power iteration on some operators
-
-    // bare levels i.e. non-difference levels
-    //char op_name[50] = "non-difference";
-    // difference levels
-    char op_name[50] = "difference";
-
-    // depth at which to apply power iteration
-    int depth_bp_op = 1;
-    // number of block power iteration vectors
-    int nr_bp_vecs = 35;
-    // relative-residual tolerance for the operators in power iteration
-    double bp_tol = 1.0e-4;
-    // number of power iteration cycles
-    int nr_bpi_cycles = 2;
-    // this indicates whether we want eigenvectors or right singular vectors, with possible values EVs or SVs
-    char spec_type[50] = "EVs";
-
-    // IMPORTANT :
-    //		   -- always call this operation with the finest-level l
-    //		   -- after calling power iteration, the result is in lx->powerit.vecs, with lx
-    //		      the level struct of the chosen level
-    if( strcmp(op_name,"difference") && depth_bp_op>g.num_levels ){
-      error0("The depth cannot be larger than the total number of levels\n");
-    }
-    block_powerit_double_init_and_alloc( spec_type, op_name, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, &l, &threading );
-    block_powerit_double( op_name, depth_bp_op, &l, &threading );
-    block_powerit_double_free( op_name, depth_bp_op, &l, &threading );
-
   }
 
   finalize_common_thread_data(commonthreaddata);

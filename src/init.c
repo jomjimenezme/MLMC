@@ -374,6 +374,8 @@ void method_setup( vector_double *V, level_struct *l, struct Thread *threading )
 
 void method_free( level_struct *l ) {
 
+  block_powerit_double_free( l );
+
 #ifdef PERS_COMMS
   level_struct *lx = l;
   while( lx->level>0 ){
@@ -553,6 +555,11 @@ void method_finalize( level_struct *l ) {
   FREE( g.local_lattice, int*, ls );
   FREE( g.block_lattice, int*, ls );
   FREE( g.post_smooth_iter, int, ls );
+  FREE( g.trace_deflation_type, int, ls );
+  FREE( g.trace_deflation_nr_vectors, int, ls );
+  FREE( g.trace_powerit_solver_tol, double, ls );
+  FREE( g.trace_powerit_cycles, int, ls );
+  FREE( g.trace_powerit_spectrum_type, int, ls );
   FREE( g.ncycle, int, ls );
   FREE( g.relax_fac, double, ls );
 #ifdef HAVE_TM
@@ -969,11 +976,30 @@ void read_geometry_data( FILE *in, int ls ) {
     sprintf( inputstr, "d%d post smooth iter:", i );
     save_pt = &(g.post_smooth_iter[i]); g.post_smooth_iter[i] = 4;
     read_parameter( &save_pt, inputstr, "%d", 1, in, _DEFAULT_SET );
+
+    sprintf( inputstr, "d%d trace deflation type:", i );
+    save_pt = &(g.trace_deflation_type[i]); g.trace_deflation_type[i] = 2;
+    read_parameter( &save_pt, inputstr, "%d", 1, in, _DEFAULT_SET );
+
+    sprintf( inputstr, "d%d trace deflation nr vectors:", i );
+    save_pt = &(g.trace_deflation_nr_vectors[i]); g.trace_deflation_nr_vectors[i] = 5;
+    read_parameter( &save_pt, inputstr, "%d", 1, in, _DEFAULT_SET );
+
+    sprintf( inputstr, "d%d trace powerit solver tol:", i );
+    save_pt = &(g.trace_powerit_solver_tol[i]); g.trace_powerit_solver_tol[i] = 1.0e-3;
+    read_parameter( &save_pt, inputstr, "%lf", 1, in, _DEFAULT_SET );
+
+    sprintf( inputstr, "d%d trace powerit cycles:", i );
+    save_pt = &(g.trace_powerit_cycles[i]); g.trace_powerit_cycles[i] = 2;
+    read_parameter( &save_pt, inputstr, "%d", 1, in, _DEFAULT_SET );
+
+    sprintf( inputstr, "d%d trace powerit spectrum type:", i );
+    save_pt = &(g.trace_powerit_spectrum_type[i]); g.trace_powerit_spectrum_type[i] = 0;
+    read_parameter( &save_pt, inputstr, "%d", 1, in, _DEFAULT_SET );
     
     sprintf( inputstr, "d%d preconditioner cycles:", i );
     save_pt = &(g.ncycle[i]); g.ncycle[i] = 1;
     read_parameter( &save_pt, inputstr, "%d", 1, in, _DEFAULT_SET );
-    
     
     sprintf( inputstr, "d%d relaxation factor:", i );
     save_pt = &(g.relax_fac[i]); g.relax_fac[i] = 1.0;
@@ -1265,6 +1291,11 @@ void allocate_for_global_struct_after_read_global_info( int ls ) {
   MALLOC( g.local_lattice[0], int, 4*ls );
   MALLOC( g.block_lattice[0], int, 4*ls );
   MALLOC( g.post_smooth_iter, int, ls );
+  MALLOC( g.trace_deflation_type, int, ls );
+  MALLOC( g.trace_deflation_nr_vectors, int, ls );
+  MALLOC( g.trace_powerit_solver_tol, double, ls );
+  MALLOC( g.trace_powerit_cycles, int, ls );
+  MALLOC( g.trace_powerit_spectrum_type, int, ls );
   MALLOC( g.ncycle, int, ls );
   MALLOC( g.relax_fac, double, ls );
 #ifdef HAVE_TM

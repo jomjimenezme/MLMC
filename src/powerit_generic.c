@@ -19,7 +19,7 @@ void block_powerit_double_init_and_alloc( char* spec_type, char* op_name, int de
   level_struct* lx = l;
   for( i=0;i<g.num_levels;i++ ){
     if( i==depth_bp_op ){ break; }
-    lx = l->next_level;
+    lx = lx->next_level;
   }
 
   lx->powerit.nr_vecs = nr_vecs;
@@ -49,25 +49,64 @@ void block_powerit_double_init_and_alloc( char* spec_type, char* op_name, int de
 }
 
 
-void block_powerit_double_free( char* op_name, int depth_bp_op, level_struct* l, struct Thread* threading ){
+void block_powerit_double_free( level_struct* l ){
 
-  START_MASTER(threading)
+  int i,j;
 
-  // access l at the right level
-  level_struct* lx = l;
-  int i;
-  for( i=0;i<g.num_levels;i++ ){
-    if( i==depth_bp_op ){ break; }
-    lx = l->next_level;
+  for( j=0;j<g.num_levels;j++ ){
+    // in case no deflation is requested
+    if( g.trace_deflation_type[j]==2 ){ continue; }
+
+    // access l at the right level
+    level_struct* lx = l;
+    for( i=0;i<g.num_levels;i++ ){
+      if( i==j ){ break; }
+      lx = lx->next_level;
+    }
+
+    FREE(lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+    FREE(lx->powerit.vecs_buff1, complex_double, lx->vector_size );
+    FREE(lx->powerit.vecs_buff2, complex_double, lx->vector_size );
+
+    FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
   }
+}
 
-  FREE(lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-  FREE(lx->powerit.vecs_buff1, complex_double, lx->vector_size );
-  FREE(lx->powerit.vecs_buff2, complex_double, lx->vector_size );
 
-  FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
+void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
 
-  END_MASTER(threading)
+  int i;
+
+  char op_name[50];
+  char spec_type[50];
+
+  // dx trace deflation type: 0   // 0 is difference, 1 is non-difference, 2 is no deflation
+  // dx trace deflation nr vectors: 10
+
+  for( i=0;i<g.num_levels;i++ ){
+
+    // in case no deflation is requested
+    if( g.trace_deflation_type[i]==2 ){ continue; }
+    
+    if( g.trace_deflation_type[i]==1 ){ strcpy( op_name,"non-difference" ); }
+    else{ strcpy( op_name,"difference" ); }
+    int depth_bp_op = i;
+    int nr_bp_vecs = g.trace_deflation_nr_vectors[i];
+    double bp_tol = g.trace_powerit_solver_tol[i];
+    int nr_bpi_cycles = g.trace_powerit_cycles[i];
+    if( g.trace_powerit_spectrum_type[i]==0 ){ strcpy( spec_type,"EVs" ); }
+    else{ strcpy( spec_type,"SVs" ); }
+
+    // IMPORTANT :
+    //		   -- always call this operation with the finest-level l
+    //		   -- after calling power iteration, the result is in lx->powerit.vecs, with lx
+    //		      the level struct of the chosen level
+    if( strcmp(op_name,"difference") && depth_bp_op>g.num_levels ){
+      error0("The depth cannot be larger than the total number of levels\n");
+    }
+    block_powerit_double_init_and_alloc( spec_type, op_name, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, l, threading );
+    block_powerit_double( op_name, depth_bp_op, l, threading );
+  }
 }
 
 
@@ -78,7 +117,7 @@ void block_powerit_double( char* op_name, int depth_bp_op, level_struct *l, stru
   int i;
   for( i=0;i<g.num_levels;i++ ){
     if( i==depth_bp_op ){ break; }
-    lx = l->next_level;
+    lx = lx->next_level;
   }
 
   // set the power iteration vectors to random
