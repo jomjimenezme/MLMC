@@ -105,42 +105,17 @@ int main( int argc, char **argv ) {
     l.h_double.min_iters = 5;
     l.h_double.trace_tol=1e-4;
 
-    rtrace = hutchinson_driver_double( &l, &threading );
-            
+    //rtrace = hutchinson_driver_double( &l, &threading );
+    rtrace=778.0;      
     START_MASTER(threadingx)
     if(g.my_rank==0) printf("\n... done\n\n");
     END_MASTER(threadingx)
+    SYNC_MASTER_TO_ALL(threadingx)
     // -------------------------------------------------------------------
 
 
 
-    // ------------ Trace with Plain-------------------------------------------
-    START_MASTER(threadingx)
-    if(g.my_rank==0) printf("Computing trace through PLAIN Hutchinson ...\n");
-    END_MASTER(threadingx)
-
-    l.h_double.rt = rtrace;
-    l.h_double.max_iters = 500000;
-    l.h_double.min_iters = 5;
-    l.h_double.trace_tol=1e-3;
     
-    //  trace = hutchinson_driver_double( &l, &threading );
- 	
-    START_MASTER(threadingx)
-    printf0("\n... done\n\n");
-    END_MASTER(threadingx)
-    SYNC_MASTER_TO_ALL(threadingx)
-    // ---------------------------------------------------------------
-
-    // ------------TRACE with BLOCK-------------------------------------------
-    
-    l.h_double.min_iters = 10;
-    l.h_double.trace_tol = 1e-5;
-
-   // block_hutchinson_driver_double( &l, &threading );
-    
-    // ---------------------------------------------------------------
-
     // ------------ Trace with MLMC------------------------------------
     
     START_MASTER(threadingx)
@@ -148,14 +123,16 @@ int main( int argc, char **argv ) {
     END_MASTER(threadingx)
 
     // get actual trace
-    l.h_double.rt = rtrace;
+    l.h_double.rough_trace = rtrace;
+    l.h_double.rt= rtrace;
     l.h_double.max_iters = 500000;
     l.h_double.min_iters = 5;
-    l.h_double.trace_tol = 1.0e-3;
-    
+    l.h_double.trace_tol = 1.0e+1;
+        SYNC_MASTER_TO_ALL(threadingx)
+
 
   //       trace = mlmc_hutchinson_diver_double( &l, &threading );
-    for(int i=1; i<=100; i++)
+    //for(int i=1; i<=100; i++)
      trace = mlmc_hutchinson_diver_double( &l, &threading );
 
     START_MASTER(threadingx)
@@ -164,23 +141,6 @@ int main( int argc, char **argv ) {
     
     // -------------------------------------------------------  
 
-   // ------------ Trace with BLOCK MLMC------------------------------------
-    
-    START_MASTER(threadingx)
-    if(g.my_rank==0) printf("Computing trace through BLOCK MLMC Hutchinson ...\n");
-    END_MASTER(threadingx)
-    
-    l.h_double.rt = rtrace;
-    l.h_double.max_iters = 1000;
-    l.h_double.min_iters = 5;
-    l.h_double.trace_tol = 1.0e-3;
-    
-    
-      //trace = mlmc_block_hutchinson_diver_double( &l, &threading );
-        
-    START_MASTER(threadingx)
-    if(g.my_rank==0) printf("\n... done\n\n");
-    END_MASTER(threadingx)
    
    
    

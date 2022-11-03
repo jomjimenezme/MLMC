@@ -223,18 +223,12 @@
   } gmres_double_struct;
 
   typedef struct {
-    vector_double buffer1; //solution
-    vector_double buffer2;  //source
-    vector_double block_buffer;
-    vector_double* X;
-    vector_double sample;
+   
        
     complex_double rough_trace;
-    double total_variance;
+
     
     vector_double mlmc_b1;
-    vector_double mlmc_b1_double;
-    vector_double* X_double;
     
     complex_double rt;
     complex_double trace;
