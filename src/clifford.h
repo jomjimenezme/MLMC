@@ -29,7 +29,7 @@
   // BASIS2: Basis used for QCDSF lattices
   // BASIS3: Basis used in the QOPQDP Code
   // BASIS4: Basis used in the tmLQCD Code
-  #define BASIS4 // change here
+  #define BASIS0 // change here
   
   enum { T, Z, Y, X };
   

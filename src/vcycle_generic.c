@@ -183,9 +183,9 @@ void vcycle_double( vector_double phi, vector_double Dphi, vector_double eta,
               }
             }
 #endif
-            START_MASTER(threading)
-            printf0( "coarsest iters = %d\n",coarsest_iters );
-            END_MASTER(threading)
+            //START_MASTER(threading)
+            //printf0( "coarsest iters = %d\n",coarsest_iters );
+            //END_MASTER(threading)
           }
         }
         START_MASTER(threading)

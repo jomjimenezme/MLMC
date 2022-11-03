@@ -79,6 +79,18 @@ int main( int argc, char **argv ) {
   {
     g.if_rademacher=0;
 
+    //for( int i=0;i<g.num_levels;i++ ){
+    //  printf0( "g.trace_deflation_type[i] = %d\n",g.trace_deflation_type[i] );
+    //  printf0( "g.trace_deflation_nr_vectors[i] = %d\n",g.trace_deflation_nr_vectors[i] );
+    //  printf0( "g.trace_powerit_solver_tol[i] = %f\n",g.trace_powerit_solver_tol[i] );
+    //  printf0( "g.trace_powerit_cycles[i] = %d\n",g.trace_powerit_cycles[i] );
+    //  printf0( "g.trace_powerit_spectrum_type[i] = %d\n",g.trace_powerit_spectrum_type[i] );
+    //}
+    //char op_name[50];
+    //strcpy( op_name,"difference" );
+    //printf0( "comparison = %d\n",strcmp( op_name,"non-difference" ) );
+    //exit(0);
+
     struct Thread threading;
     setup_threading(&threading, commonthreaddata, &l);
     setup_no_threading(no_threading, &l);
@@ -88,6 +100,9 @@ int main( int argc, char **argv ) {
     // iterative phase
     method_update( l.setup_iter, &l, &threading );
     
+    block_powerit_driver_double( &l, &threading );
+    
+    /*
     //init hutchinson
     l.h_double.block_size =12;   //set Before allocating BLOCK stuff!  
     l.h_double.max_iters = 500000; //set Before allocating BLOCK stuff!      
@@ -146,7 +161,7 @@ int main( int argc, char **argv ) {
    
    
     hutchinson_diver_double_free( &l, &threading );
-    
+    */
   }
 
   finalize_common_thread_data(commonthreaddata);
