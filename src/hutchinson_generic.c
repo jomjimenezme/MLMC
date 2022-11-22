@@ -2,71 +2,124 @@
     #include "main.h"
     
     
+    struct estimate {
+        int counter; //required number of estimates.
+        complex_double estimate;
+    };    
     
-    void rhs_define_double( vector_double rhs, level_struct *l, struct Thread *threading ) {
+    struct estimate compute_coarsest_trace(level_struct *ls, int nr_ests, double tol, gmres_double_struct *ps, hutchinson_double_struct* h, struct Thread *threading){
         
-        // no hyperthreading here
-        if(threading->thread != 0)
-            return;
+    
+            
+            //FIXME: set is as input parameter?
+            int low_tol_restart_length = 5;
+            int tmp_length = ps->restart_length;
+            ps->restart_length = low_tol_restart_length;
+            
+            
+            double buff_tol = ps->tol , RMSD = 0.0;
+            complex_double es = 0.0;
+            int j;
+            complex_double rough_trace = h->rt;
+            double est_tol = h->trace_tol;
+            
+        int li = g.num_levels-1;
+        int start=0;
         
-        int start = threading->start_index[l->depth];
-        int end = threading->end_index[l->depth];
+        START_MASTER(threading)
+        printf0("starting coarsest level\n\n", li);
+        END_MASTER(threading)
+        SYNC_MASTER_TO_ALL(threading)
+            struct estimate coarsest;
         
-        if ( g.rhs == 0 ) {
-            vector_double_define( rhs, 1, start, end, l );
+        START_MASTER(threading)
+        if(g.my_rank==0)printf("LEVEL----------- \t %d  \t ests: %d  \t start: %d  \t end: %d \t vector size: %d \n ", li, nr_ests, start, ps->v_end, ls->inner_vector_size);
+        END_MASTER(threading)
+        
+        complex_double sample[nr_ests]; 
+        double variance = 0.0;
+        int counter = 0; 
+        
+        double tt1c = MPI_Wtime();
+        
+        for(int i=0;i<nr_ests ; i++){
             START_MASTER(threading)
-            if ( g.print > 0 ) printf0("rhs = ones\n");
+            vector_double_define_random_rademacher( ps->b, 0, ls->inner_vector_size, ls );    
             END_MASTER(threading)
-        } else if ( g.rhs == 1 )  {
-            vector_double_define( rhs, 0, start, end, l );
-            if ( g.my_rank == 0 ) {
-                START_LOCKED_MASTER(threading)
-                rhs[0] = 1.0;
-                END_LOCKED_MASTER(threading)
+            SYNC_MASTER_TO_ALL(threading)
+            
+            ps->tol = g.tol;
+            g.coarse_tol = g.tol;
+            double t0 = MPI_Wtime();
+            
+            
+            //gmres_double_struct *ps = ps;
+            //level_struct *ls = ls;
+            
+            ps->restart_length = tmp_length;
+            
+            int start, end, coarsest_iters;
+            compute_core_start_end(ps->v_start, ps->v_end, &start, &end, ls, threading);
+            #ifdef POLYPREC
+            ps->preconditioner = ps->polyprec_double.preconditioner;
+            #endif
+            #ifdef GCRODR
+            coarsest_iters = flgcrodr_double( ps, ls, threading );
+            #else
+            coarsest_iters = fgmres_double( ps, ls, threading );
+            #endif
+            START_MASTER(threading)
+            g.avg_b1 += coarsest_iters;
+            g.avg_b2 += 1;
+            g.avg_crst = g.avg_b1/g.avg_b2;
+            END_MASTER(threading)
+            SYNC_MASTER_TO_ALL(threading)
+            SYNC_CORES(threading)
+            #ifdef POLYPREC
+            if ( ls->level==0 && ls->p_double.polyprec_double.update_lejas == 1 ) {
+                if ( coarsest_iters >= 1.5*ps->polyprec_double.d_poly ) {
+                    // re-construct Lejas
+                    re_construct_lejas_double( ls, threading );
+                }
             }
+            #endif
+                        
+            
+            double t1 = MPI_Wtime();
             START_MASTER(threading)
-            if ( g.print > 0 ) printf0("rhs = first unit vector\n");
+            printf0("coarsest iters = %d (time = %f)\n", coarsest_iters, t1-t0);
             END_MASTER(threading)
-        } else if ( g.rhs == 2 ) {
-            // this would yield different results if we threaded it, so we don't
-            START_LOCKED_MASTER(threading)
-            if ( g.if_rademacher==1 )
-                vector_double_define_random_rademacher( rhs, 0, l->inner_vector_size, l );
-            else
-                vector_double_define_random( rhs, 0, l->inner_vector_size, l );
-            END_LOCKED_MASTER(threading)
+            ps->tol = buff_tol;
+            g.coarse_tol = buff_tol;
+            complex_double tmpx= global_inner_product_double( ps->b, ps->x, ps->v_start, ps->v_end, ls, threading );   
+            sample[i]= tmpx;      
+            es += tmpx;
+            
+            variance = 0.0;
+            for (j=0; j<i; j++) // compute the variance
+                variance += (sample[j]- es/(i+1)) *conj( sample[j]- es/(i+1)); 
+            variance /= (j+1);
+            RMSD = sqrt(variance/(j+1)); //RMSD= sqrt(var+ bias²)
+            
             START_MASTER(threading)
-            if ( g.print > 0 ) printf0("rhs = random\n");
+            if(g.my_rank==0)printf( "%d \t var %.15f \t Est %.15f  \t RMSD %.15f <  %.15f ?? \n ", i, creal(variance), creal( es/(i+1) ), RMSD,  cabs(rough_trace)*tol*est_tol );
             END_MASTER(threading)
-            //} else if ( g.rhs == 4 ) {
-            //  // this would yield different results if we threaded it, so we don't
-            //  START_LOCKED_MASTER(threading)
-            //  vector_double_define_random_rademacher( rhs, 0, l->inner_vector_size, l );
-            //  END_LOCKED_MASTER(threading)
-            //  START_MASTER(threading)
-            //  if ( g.print > 0 ) printf0("rhs = random\n");
-            //  END_MASTER(threading)
-        } else if ( g.rhs == 3 ) {
-            vector_double_define( rhs, 0, start, end, l );
-        } else {
-            ASSERT( g.rhs >= 0 && g.rhs <= 4 );
+            SYNC_MASTER_TO_ALL(threading)
+            counter=i+1;
+            if(i !=0 && RMSD< cabs(rough_trace)*tol*est_tol && i>=h->min_iters-1 ){counter=i+1; break;}
         }
+        
+        double tt2c = MPI_Wtime();
+        
+        START_MASTER(threading)
+        printf0("end of coarsest (total time = %f)\n\n", li, tt2c-tt1c);
+        END_MASTER(threading)
+        
+        coarsest.counter=counter;
+        coarsest.estimate=es;
+        return coarsest;
+        
     }
-    
-    void solve_double( vector_double solution, vector_double source, level_struct *l, struct Thread *threading ){
-        
-        int iter = 0, start = threading->start_index[l->depth], end = threading->end_index[l->depth];
-        
-        vector_double rhs = g.mixed_precision==2?g.p_MP.dp.b:g.p.b;
-        vector_double sol = g.mixed_precision==2?g.p_MP.dp.x:g.p.x;
-        
-        vector_double_copy( rhs, source, start, end, l );  
-        iter = fgmres_double( &(g.p), l, threading );
-        vector_double_copy( solution, sol, start, end, l );
-    }
-    
-    
-    
     
     
     
@@ -308,96 +361,14 @@
             
         }
         
-        START_MASTER(threading)
-        printf0("starting coarsest level\n\n", li);
-        END_MASTER(threading)
-        SYNC_MASTER_TO_ALL(threading)
         
-        //----------------------Hutchinson for just coarsest level-----------------       
-        li = g.num_levels-1;
-        
-        START_MASTER(threading)
-        if(g.my_rank==0)printf("LEVEL----------- \t %d  \t ests: %d  \t start: %d  \t end: %d \t vector size: %d \n ", li, nr_ests[li], start, ps[li]->v_end, ls[li]->inner_vector_size);
-        END_MASTER(threading)
-        
-        complex_double sample[nr_ests[li]]; 
-        variance = 0.0;
-        counter[li]=0;
-        
-        double tt1c = MPI_Wtime();
-        
-        for(i=0;i<nr_ests[li]  ; i++){
-            START_MASTER(threading)
-            vector_double_define_random_rademacher( ps[li]->b, 0, ls[li]->inner_vector_size, ls[li] );    
-            END_MASTER(threading)
-            SYNC_MASTER_TO_ALL(threading)
-            
-            ps[li]->tol = g.tol;
-            g.coarse_tol = g.tol;
-            double t0 = MPI_Wtime();
-            
-            
-            gmres_double_struct *px = ps[li];
-            level_struct *lx = ls[li];
-            
-            px->restart_length = tmp_length;
-            
-            int start, end, coarsest_iters;
-            compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
-            #ifdef POLYPREC
-            px->preconditioner = px->polyprec_double.preconditioner;
-            #endif
-            #ifdef GCRODR
-            coarsest_iters = flgcrodr_double( px, lx, threading );
-            #else
-            coarsest_iters = fgmres_double( px, lx, threading );
-            #endif
-            START_MASTER(threading)
-            g.avg_b1 += coarsest_iters;
-            g.avg_b2 += 1;
-            g.avg_crst = g.avg_b1/g.avg_b2;
-            END_MASTER(threading)
-            SYNC_MASTER_TO_ALL(threading)
-            SYNC_CORES(threading)
-            #ifdef POLYPREC
-            if ( lx->level==0 && lx->p_double.polyprec_double.update_lejas == 1 ) {
-                if ( coarsest_iters >= 1.5*px->polyprec_double.d_poly ) {
-                    // re-construct Lejas
-                    re_construct_lejas_double( lx, threading );
-                }
-            }
-            #endif
-                        
-            
-            double t1 = MPI_Wtime();
-            START_MASTER(threading)
-            printf0("coarsest iters = %d (time = %f)\n", coarsest_iters, t1-t0);
-            END_MASTER(threading)
-            ps[li]->tol = buff_tol[li];
-            g.coarse_tol = buff_tol[li];
-            tmpx= global_inner_product_double( ps[li]->b, ps[li]->x, ps[li]->v_start, ps[li]->v_end, ls[li], threading );   
-            sample[i]= tmpx;      
-            es[li] += tmpx;
-            
-            variance = 0.0;
-            for (j=0; j<i; j++) // compute the variance
-                variance += (sample[j]- es[li]/(i+1)) *conj( sample[j]- es[li]/(i+1)); 
-            variance /= (j+1);
-            RMSD = sqrt(variance/(j+1)); //RMSD= sqrt(var+ bias²)
-            
-            START_MASTER(threading)
-            if(g.my_rank==0)printf( "%d \t var %.15f \t Est %.15f  \t RMSD %.15f <  %.15f ?? \n ", i, creal(variance), creal( es[li]/(i+1) ), RMSD,  cabs(rough_trace)*tol[li]*est_tol );
-            END_MASTER(threading)
-            SYNC_MASTER_TO_ALL(threading)
-            counter[li]=i+1;
-            if(i !=0 && RMSD< cabs(rough_trace)*tol[li]*est_tol && i>=l->h_double.min_iters-1 ){counter[li]=i+1; break;}
-        }
-        
-        double tt2c = MPI_Wtime();
-        
-        START_MASTER(threading)
-        printf0("end of coarsest (total time = %f)\n\n", li, tt2c-tt1c);
-        END_MASTER(threading)
+        //----------------------Hutchinson for just coarsest level-----------------               
+        struct estimate coarsest;
+        coarsest = compute_coarsest_trace(ls[li], nr_ests[li], tol[li], ps[li], h, threading);
+        es[li]= coarsest.estimate;
+        counter[li] = coarsest.counter;
+        //--------------------------------------------------------------------------       
+
         
         trace = 0.0;
         for( i=0;i<g.num_levels;i++ ){

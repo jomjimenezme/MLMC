@@ -100,40 +100,30 @@ int main( int argc, char **argv ) {
     // iterative phase
     method_update( l.setup_iter, &l, &threading );
     
-    block_powerit_driver_double( &l, &threading );
+    //block_powerit_driver_double( &l, &threading );
     
-    /*
-    //init hutchinson
-    l.h_double.block_size =12;   //set Before allocating BLOCK stuff!  
-    l.h_double.max_iters = 500000; //set Before allocating BLOCK stuff!      
     hutchinson_diver_double_init( &l, &threading );  
     hutchinson_diver_double_alloc( &l, &threading );
     complex_double trace, rtrace;
     struct Thread *threadingx = &threading;  
 
-    // ------------ROUGH with Plain-------------------------------------------
+    
     START_MASTER(threadingx)
     if(g.my_rank==0) printf("Computing ROUGH trace through PLAIN Hutchinson ...\n");
     END_MASTER(threadingx)
     SYNC_MASTER_TO_ALL(threadingx)
-    l.h_double.max_iters = 5;
-    l.h_double.min_iters = 5;
-    l.h_double.trace_tol=1e-4;
-
     //rtrace = hutchinson_driver_double( &l, &threading );
     rtrace=778.0;      
     START_MASTER(threadingx)
     if(g.my_rank==0) printf("\n... done\n\n");
     END_MASTER(threadingx)
     SYNC_MASTER_TO_ALL(threadingx)
-    // -------------------------------------------------------------------
-
 
 
     
     // ------------ Trace with MLMC------------------------------------
     
-    START_MASTER(threadingx)
+      START_MASTER(threadingx)
     printf0("Computing trace through MLMC Hutchinson ...\n");
     END_MASTER(threadingx)
 
@@ -142,18 +132,15 @@ int main( int argc, char **argv ) {
     l.h_double.rt= rtrace;
     l.h_double.max_iters = 500000;
     l.h_double.min_iters = 5;
-    l.h_double.trace_tol = 1.0e+1;
-        SYNC_MASTER_TO_ALL(threadingx)
-
-
-  //       trace = mlmc_hutchinson_diver_double( &l, &threading );
+    l.h_double.trace_tol = 1.0e-2;
+    SYNC_MASTER_TO_ALL(threadingx)
+    
     //for(int i=1; i<=100; i++)
      trace = mlmc_hutchinson_diver_double( &l, &threading );
 
     START_MASTER(threadingx)
     if(g.my_rank==0) printf("\n... done\n\n");
     END_MASTER(threadingx)
-    
     // -------------------------------------------------------  
 
    
@@ -161,7 +148,7 @@ int main( int argc, char **argv ) {
    
    
     hutchinson_diver_double_free( &l, &threading );
-    */
+    
   }
 
   finalize_common_thread_data(commonthreaddata);
