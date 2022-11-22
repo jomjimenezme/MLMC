@@ -7,22 +7,21 @@
         complex_double estimate;
     };    
     
-    struct estimate compute_coarsest_trace(level_struct *ls, int nr_ests, double tol, gmres_double_struct *ps, hutchinson_double_struct* h, struct Thread *threading){
+    struct estimate compute_coarsest_trace(level_struct *ls, int nr_ests, double tol, gmres_double_struct *ps, hutchinson_double_struct* h, struct Thread *threading){        
         
-    
-            
-            //FIXME: set is as input parameter?
-            int low_tol_restart_length = 5;
-            int tmp_length = ps->restart_length;
-            ps->restart_length = low_tol_restart_length;
-            
-            
-            double buff_tol = ps->tol , RMSD = 0.0;
-            complex_double es = 0.0;
-            int j;
-            complex_double rough_trace = h->rt;
-            double est_tol = h->trace_tol;
-            
+        
+        //FIXME: set is as input parameter?
+        int low_tol_restart_length = 5;
+        int tmp_length = ps->restart_length;
+        ps->restart_length = low_tol_restart_length;
+        
+        
+        double buff_tol = ps->tol , RMSD = 0.0;
+        complex_double es = 0.0;
+        int j;
+        complex_double rough_trace = h->rt;
+        double est_tol = h->trace_tol;
+        
         int li = g.num_levels-1;
         int start=0;
         
@@ -30,7 +29,7 @@
         printf0("starting coarsest level\n\n", li);
         END_MASTER(threading)
         SYNC_MASTER_TO_ALL(threading)
-            struct estimate coarsest;
+        struct estimate coarsest;
         
         START_MASTER(threading)
         if(g.my_rank==0)printf("LEVEL----------- \t %d  \t ests: %d  \t start: %d  \t end: %d \t vector size: %d \n ", li, nr_ests, start, ps->v_end, ls->inner_vector_size);
@@ -53,8 +52,6 @@
             double t0 = MPI_Wtime();
             
             
-            //gmres_double_struct *ps = ps;
-            //level_struct *ls = ls;
             
             ps->restart_length = tmp_length;
             
@@ -83,7 +80,7 @@
                 }
             }
             #endif
-                        
+            
             
             double t1 = MPI_Wtime();
             START_MASTER(threading)
@@ -121,7 +118,167 @@
         
     }
     
-    
+    struct estimate compute_difference_level_trace(level_struct *ls, int nr_ests, double tol, gmres_double_struct *ps, hutchinson_double_struct* h, struct Thread *threading){
+        
+        struct estimate difference;
+        complex_double rough_trace = h->rt;
+        double est_tol = h->trace_tol;//  1E-6;
+        int li = ls->depth;
+        complex_double sample[nr_ests]; 
+        complex_double  es=0.0;
+        double var =0.0, RMSD=0.0;
+        int start, end, i, j, coarsest_iters;
+        
+        complex_double variance=0.0;    int counter=0;
+        compute_core_start_end( 0, ls->inner_vector_size, &start, &end, ls, threading );
+        //   for( int li=0;li<(g.num_levels-1);li++ ){
+        
+        level_struct *lx = ls->next_level;
+        gmres_double_struct *px = &(lx->p_double);
+        
+        int tmp_length =h->tmp_length;
+        int low_tol_restart_length = h-> low_tol_restart_length;
+        
+        complex_double buff_tol_coarser= ps->tol;
+        
+        double tt0 = MPI_Wtime();
+        
+        
+        
+        START_MASTER(threading)
+        // if(g.my_rank==0) printf("LEVEL----------- \t %d  \t ests: %d  \t start: %d  \t end: %d \t vector size: %d \n ", li, nr_ests, start, ps->v_end, ls->inner_vector_size);
+        END_MASTER(threading)
+        
+        START_MASTER(threading)
+        printf0("starting level difference = %d\n\n", li);
+        END_MASTER(threading)
+        
+        for(i=0;i<nr_ests  ; i++){
+            //---------------------Get random vector-----------------------------------------------------------
+            START_MASTER(threading) 
+            vector_double_define_random_rademacher( ps->b, 0, ls->inner_vector_size, ls );          
+            END_MASTER(threading)
+            SYNC_MASTER_TO_ALL(threading)
+            
+            
+            
+            //-----------------Solve the system in current level and the next one----------------- 
+            if(li==0){                    
+                trans_double( ls->sbuf_double[0], ps->b, ls->s_double.op.translation_table, ls, threading );     
+                restrict_double( px->b, ls->sbuf_double[0], ls, threading ); // get rhs for next level.
+                px->tol = g.tol;
+            }
+            else{
+                restrict_double( px->b, ps->b, ls, threading ); // get rhs for next level.
+                px ->tol = g.tol;
+                g.coarse_tol = g.tol;
+            }
+            
+            double t0 = MPI_Wtime();
+            
+            if( (li+2)==g.num_levels ){      
+                
+                px->restart_length = tmp_length;
+                
+                #ifdef POLYPREC
+                px->preconditioner = px->polyprec_double.preconditioner;
+                #endif
+                #ifdef GCRODR
+                coarsest_iters = flgcrodr_double( px, lx, threading );
+                #else
+                coarsest_iters = fgmres_double( px, lx, threading );
+                #endif
+                START_MASTER(threading)
+                g.avg_b1 += coarsest_iters;
+                g.avg_b2 += 1;
+                g.avg_crst = g.avg_b1/g.avg_b2;
+                END_MASTER(threading)
+                SYNC_MASTER_TO_ALL(threading)
+                SYNC_CORES(threading)
+                #ifdef POLYPREC
+                if ( lx->level==0 && lx->p_double.polyprec_double.update_lejas == 1 ) {
+                    if ( coarsest_iters >= 1.5*px->polyprec_double.d_poly ) {
+                        // re-construct Lejas
+                        re_construct_lejas_double( lx, threading );
+                    }
+                }
+                #endif
+                
+                px->restart_length = low_tol_restart_length;
+                
+            } else {
+                
+                coarsest_iters = fgmres_double( px, lx, threading );
+            }
+            
+            double t1 = MPI_Wtime();
+            START_MASTER(threading)
+            if( (li+1)==3 ){
+                printf0("coarsest iters = %d (time = %f)\n", coarsest_iters, t1-t0);
+            } else {
+                printf0("coarse or fine iters = %d (time = %f)\n", coarsest_iters, t1-t0);
+            }
+            END_MASTER(threading)
+            px->tol =buff_tol_coarser ;
+            
+            
+            //--------------------------------------Interpolate Solution----------------------------
+            if(li==0){
+                interpolate3_double( ls->sbuf_double[1], px->x, ls, threading ); //      
+                trans_back_double( h->mlmc_b1, ls->sbuf_double[1], ls->s_double.op.translation_table, ls, threading );   
+            }
+            else{
+                interpolate3_double( h->mlmc_b1, px->x, ls, threading ); //   
+                g.coarse_tol = buff_tol_coarser;
+                ps->tol = g.tol;  
+            }
+            //------------------------------------------------------------------------------------
+            
+            
+            //--------------------------------------Solve Finer level----------------------------
+            t0 = MPI_Wtime();
+            
+            int fine_iters = fgmres_double( ps, ls, threading );
+            
+            t1 = MPI_Wtime();
+            START_MASTER(threading)
+            printf0("fine iters = %d (time = %f)\n", fine_iters, t1-t0);
+            END_MASTER(threading)
+            //------------------------------------------------------------------------------------
+            
+            //--------------Get the difference of the solutions and the corresponding sample--------------                        
+            vector_double_minus( h->mlmc_b1, ps->x, h->mlmc_b1, start, end, ls );
+            complex_double tmpx =  global_inner_product_double( ps->b, h->mlmc_b1, ps->v_start, ps->v_end, ls, threading );      
+            sample[i]= tmpx;      
+            es +=  tmpx;
+            //----------------------------------------------------------------------------------------------
+            
+            //--------------Get the Variance in the current level and use it in stop criteria---------------  
+            variance = 0.0;
+            for (j=0; j<i; j++) // compute the variance
+                variance += (sample[j]- es/(i+1)) *conj( sample[j]- es/(i+1)); 
+            variance /= (j+1);
+            RMSD = sqrt(variance/(j+1)); //RMSD= sqrt(var+ bias²)
+            
+            START_MASTER(threading)
+            if(g.my_rank==0)printf( "%d \t var %.15f \t Est %.15f  \t RMSD %.15f <  %.15f ?? \n ", i, creal(variance), creal( es/(i+1) ), RMSD,  cabs(rough_trace)*tol*est_tol );
+            END_MASTER(threading)
+            SYNC_MASTER_TO_ALL(threading)     
+            counter=i+1;
+            if(i !=0 && RMSD< cabs(rough_trace)*tol*est_tol && i>=h->min_iters-1){counter=i+1; break;}
+            //----------------------------------------------------------------------------------------------    
+        }
+        
+        double tt1 = MPI_Wtime();
+        
+        START_MASTER(threading)
+        printf0("ending difference = %d (total time = %f)\n\n", li, tt1-tt0);
+        END_MASTER(threading)
+        
+        difference.counter=counter;
+        difference.estimate=es;
+        return difference;
+    }
     
     void hutchinson_diver_double_init( level_struct *l, struct Thread *threading ) {
         hutchinson_double_struct* h = &(l->h_double);
@@ -129,7 +286,7 @@
         //MLMC
         h->mlmc_b1 = NULL;
         
-        
+    
         SYNC_MASTER_TO_ALL(threading)
     }
     
@@ -156,13 +313,15 @@
         complex_double rough_trace = h->rt;
         
         // FIXME : make this int a sort of input parameter ?
-        int low_tol_restart_length = 5;
+        h->low_tol_restart_length =5;
+        int low_tol_restart_length = h-> low_tol_restart_length;
+        
+
         
         START_MASTER(threading)
         g.avg_b1 = 0.0;     g.avg_b2 = 0.0;     g.avg_crst = 0.0;
         END_MASTER(threading)
         
-        complex_double cov[12*12]; 
         double RMSD;
         
         complex_double trace=0.0; 
@@ -211,154 +370,23 @@
             END_MASTER(threading)
         }
         
+        
+        
         // enforcing this at the coarsest level for ~10^-1 solves
-        int tmp_length = ps[g.num_levels-1]->restart_length;
+        h->tmp_length = ps[g.num_levels-1]->restart_length;
         ps[g.num_levels-1]->restart_length = low_tol_restart_length;
+        int tmp_length = h->tmp_length;
         
         complex_double variance = 0.0;
         complex_double es[g.num_levels];  //An estimate per level
         memset( es,0,g.num_levels*sizeof(complex_double) );
         complex_double tmpx = 0.0;
         //---------------------------------------------------------------------  
-        
         //-----------------Hutchinson for all but coarsest level-----------------    
         for( li=0;li<(g.num_levels-1);li++ ){
-            
-            double tt0 = MPI_Wtime();
-            
-            variance=0.0;    counter[li]=0;
-            complex_double sample[nr_ests[li]]; 
-            compute_core_start_end( 0, ls[li]->inner_vector_size, &start, &end, l, threading );
-            
-            START_MASTER(threading)
-            // if(g.my_rank==0) printf("LEVEL----------- \t %d  \t ests: %d  \t start: %d  \t end: %d \t vector size: %d \n ", li, nr_ests[li], start, ps[li]->v_end, ls[li]->inner_vector_size);
-            END_MASTER(threading)
-            
-            START_MASTER(threading)
-            printf0("starting level difference = %d\n\n", li);
-            END_MASTER(threading)
-            
-            for(i=0;i<nr_ests[li]  ; i++){
-                //---------------------Get random vector-----------------------------------------------------------
-                START_MASTER(threading) 
-                vector_double_define_random_rademacher( ps[li]->b, 0, ls[li]->inner_vector_size, ls[li] );          
-                END_MASTER(threading)
-                SYNC_MASTER_TO_ALL(threading)
-                
-                
-                //-----------------Solve the system in current level and the next one----------------- 
-                if(li==0){                    
-                    trans_double( l->sbuf_double[0], ps[li]->b, l->s_double.op.translation_table, l, threading );     
-                    restrict_double( ps[li+1]->b, l->sbuf_double[0], ls[li], threading ); // get rhs for next level.
-                    ps[li+1]->tol = g.tol;
-                }
-                else{
-                    restrict_double( ps[li+1]->b, ps[li]->b, ls[li], threading ); // get rhs for next level.
-                    ps[li+1]->tol = g.tol;
-                    g.coarse_tol = g.tol;
-                }
-                double t0 = MPI_Wtime();
-                level_struct *lx = ls[li+1];
-                int coarsest_iters;
-                
-                if( (li+2)==g.num_levels ){
-                    
-                    ps[li+1]->restart_length = tmp_length;
-                    
-                    #ifdef POLYPREC
-                    ps[li+1]->preconditioner = ps[li+1]->polyprec_double.preconditioner;
-                    #endif
-                    #ifdef GCRODR
-                    coarsest_iters = flgcrodr_double( ps[li+1], lx, threading );
-                    #else
-                    coarsest_iters = fgmres_double( ps[li+1], lx, threading );
-                    #endif
-                    START_MASTER(threading)
-                    g.avg_b1 += coarsest_iters;
-                    g.avg_b2 += 1;
-                    g.avg_crst = g.avg_b1/g.avg_b2;
-                    END_MASTER(threading)
-                    SYNC_MASTER_TO_ALL(threading)
-                    SYNC_CORES(threading)
-                    #ifdef POLYPREC
-                    if ( lx->level==0 && lx->p_double.polyprec_double.update_lejas == 1 ) {
-                        if ( coarsest_iters >= 1.5*ps[li+1]->polyprec_double.d_poly ) {
-                            // re-construct Lejas
-                            re_construct_lejas_double( lx, threading );
-                        }
-                    }
-                    #endif
-                    
-                    ps[li+1]->restart_length = low_tol_restart_length;
-                    
-                } else {
-                    coarsest_iters = fgmres_double( ps[li+1], lx, threading );
-                }
-                
-                double t1 = MPI_Wtime();
-                START_MASTER(threading)
-                if( (li+1)==3 ){
-                    printf0("coarsest iters = %d (time = %f)\n", coarsest_iters, t1-t0);
-                } else {
-                    printf0("coarse or fine iters = %d (time = %f)\n", coarsest_iters, t1-t0);
-                }
-                END_MASTER(threading)
-                ps[li+1]->tol =buff_tol[li+1] ;
-                
-                
-                //--------------------------------------Interpolate Solution----------------------------
-                if(li==0){
-                    interpolate3_double( l->sbuf_double[1], ps[li+1]->x, ls[li], threading ); //      
-                    trans_back_double( h->mlmc_b1, l->sbuf_double[1], l->s_double.op.translation_table, l, threading );   
-                }
-                else{
-                    interpolate3_double( h->mlmc_b1, ps[li+1]->x, ls[li], threading ); //   
-                    g.coarse_tol = buff_tol[li+1];
-                    ps[li]->tol = g.tol;  
-                }
-                //------------------------------------------------------------------------------------
-                
-                
-                //--------------------------------------Solve Finer level----------------------------
-                t0 = MPI_Wtime();
-                
-                int fine_iters = fgmres_double( ps[li], ls[li], threading );
-                
-                t1 = MPI_Wtime();
-                START_MASTER(threading)
-                printf0("fine iters = %d (time = %f)\n", fine_iters, t1-t0);
-                END_MASTER(threading)
-                //------------------------------------------------------------------------------------
-                
-                //--------------Get the difference of the solutions and the corresponding sample--------------                        
-                vector_double_minus( h->mlmc_b1, ps[li]->x, h->mlmc_b1, start, end, ls[li] );
-                tmpx =  global_inner_product_double( ps[li]->b, h->mlmc_b1, ps[li]->v_start, ps[li]->v_end, ls[li], threading );      
-                sample[i]= tmpx;      
-                es[li] +=  tmpx;
-                //----------------------------------------------------------------------------------------------
-                
-                //--------------Get the Variance in the current level and use it in stop criteria---------------  
-                variance = 0.0;
-                for (j=0; j<i; j++) // compute the variance
-                    variance += (sample[j]- es[li]/(i+1)) *conj( sample[j]- es[li]/(i+1)); 
-                variance /= (j+1);
-                RMSD = sqrt(variance/(j+1)); //RMSD= sqrt(var+ bias²)
-                
-                START_MASTER(threading)
-                if(g.my_rank==0)printf( "%d \t var %.15f \t Est %.15f  \t RMSD %.15f <  %.15f ?? \n ", i, creal(variance), creal( es[li]/(i+1) ), RMSD,  cabs(rough_trace)*tol[li]*est_tol );
-                END_MASTER(threading)
-                SYNC_MASTER_TO_ALL(threading)     
-                counter[li]=i+1;
-                if(i !=0 && RMSD< cabs(rough_trace)*tol[li]*est_tol && i>=l->h_double.min_iters-1){counter[li]=i+1; break;}
-                //----------------------------------------------------------------------------------------------    
-            }
-            
-            double tt1 = MPI_Wtime();
-            
-            START_MASTER(threading)
-            printf0("ending difference = %d (total time = %f)\n\n", li, tt1-tt0);
-            END_MASTER(threading)
-            
+            struct estimate difference = compute_difference_level_trace(ls[li], nr_ests[li], tol[li], ps[li], h, threading);
+            es[li]= difference.estimate;
+            counter[li] = difference.counter;    
         }
         
         
@@ -368,7 +396,7 @@
         es[li]= coarsest.estimate;
         counter[li] = coarsest.counter;
         //--------------------------------------------------------------------------       
-
+        
         
         trace = 0.0;
         for( i=0;i<g.num_levels;i++ ){
@@ -389,6 +417,7 @@
         return trace;
         
     }
+    
     
     
     

@@ -238,6 +238,12 @@
     
     double trace_tol;
     
+    // enforcing this at the coarsest level for ~10^-1 solves
+    int tmp_length;
+    
+    // FIXME : make this int a sort of input parameter ?
+    int low_tol_restart_length;
+    
   } hutchinson_double_struct;
 
   typedef struct {
