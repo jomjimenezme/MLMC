@@ -229,6 +229,7 @@
 
     
     vector_double mlmc_b1;
+    vector_double mlmc_b2;
     
     complex_double rt;
     complex_double trace;
