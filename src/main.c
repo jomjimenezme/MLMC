@@ -123,8 +123,8 @@ int main( int argc, char **argv ) {
     
     // ------------ Trace with MLMC------------------------------------
     
-      START_MASTER(threadingx)
-    printf0("Computing trace through MLMC Hutchinson ...\n");
+    START_MASTER(threadingx)
+    printf("Computing trace through MLMC Hutchinson ...\n");
     END_MASTER(threadingx)
 
     // get actual trace
@@ -136,11 +136,12 @@ int main( int argc, char **argv ) {
     SYNC_MASTER_TO_ALL(threadingx)
     
     //for(int i=1; i<=100; i++)
-     //trace = mlmc_hutchinson_diver_double( &l, &threading );
-     trace = split_mlmc_hutchinson_diver_double( &l, &threading );
+    //trace = mlmc_hutchinson_diver_double( &l, &threading );
+    trace = split_mlmc_hutchinson_diver_double( &l, &threading );
 
     START_MASTER(threadingx)
     if(g.my_rank==0) printf("\n... done\n\n");
+    printf("Resulting trace = %f+i%f\n", CSPLIT(trace));
     END_MASTER(threadingx)
     // -------------------------------------------------------  
 

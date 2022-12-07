@@ -5,7 +5,16 @@
     struct estimate {
         int counter; //required number of estimates.
         complex_double estimate;
-    };    
+    };
+
+
+    struct sample {
+        // required number of estimates
+        int sample_size;
+        // accumulated trace
+        complex_double acc_trace;
+    };
+
     
     struct estimate compute_coarsest_trace(level_struct *ls, int nr_ests, double tol, gmres_double_struct *ps, hutchinson_double_struct* h, struct Thread *threading){        
         
@@ -557,6 +566,8 @@
         
         h->mlmc_b2 =NULL;
         
+        h->rademacher_vector =NULL;
+        
         SYNC_MASTER_TO_ALL(threading)
     }
     
@@ -564,8 +575,10 @@
         hutchinson_double_struct* h = &(l->h_double) ;
         
         //For MLMC
-        PUBLIC_MALLOC( h->mlmc_b1, complex_double, l->inner_vector_size );   
-        PUBLIC_MALLOC( h->mlmc_b2, complex_double, l->inner_vector_size );   
+        PUBLIC_MALLOC( h->mlmc_b1, complex_double, l->inner_vector_size );
+        PUBLIC_MALLOC( h->mlmc_b2, complex_double, l->inner_vector_size );
+        
+        PUBLIC_MALLOC( h->rademacher_vector, complex_double, l->inner_vector_size );
         
     }
     
@@ -573,6 +586,8 @@
         hutchinson_double_struct* h = &(l->h_double) ;
         
         PUBLIC_FREE( h->mlmc_b1, complex_double, l->inner_vector_size );   
+        PUBLIC_FREE( h->mlmc_b2, complex_double, l->inner_vector_size );   
+        PUBLIC_FREE( h->rademacher_vector, complex_double, l->inner_vector_size );   
     }
     
     complex_double mlmc_hutchinson_diver_double( level_struct *l, struct Thread *threading ) {
@@ -682,7 +697,7 @@
     
     
     
-    complex_double split_mlmc_hutchinson_diver_double( level_struct *l, struct Thread *threading ) {
+    complex_double split2_mlmc_hutchinson_diver_double( level_struct *l, struct Thread *threading ) {
         
         hutchinson_double_struct* h = &(l->h_double) ;
         
@@ -807,14 +822,83 @@
     
     
     
+
+
+
+  // -------------------------------------------------------------------
+
+
+  // the term tr( R A_{l}^{-1} P - A_{l+1}^{-1} )
+  complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
+
+    // FIRST TERM
+
+    // apply A_{l+1}^{-1}
+    // TODO
+
+    // SECOND TERM
+
+  }
+
+
+  void rademacher_create( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading ){
+
+    if( type==0 ){
+      START_MASTER(threading)
+      vector_double_define_random_rademacher( h->rademacher_vector, 0, l->inner_vector_size, l );
+      END_MASTER(threading)
+      SYNC_MASTER_TO_ALL(threading)
+    }
+    else if( type==1 ){
+      START_MASTER(threading)
+      vector_double_define_random_rademacher( h->rademacher_vector, 0, l->next_level->inner_vector_size, l->next_level );
+      END_MASTER(threading)
+      SYNC_MASTER_TO_ALL(threading)
+     }
+    else{ error("Unknown value for type of Rademacher vector in relation to level of creation\n"); }
+  }
+
+
+  // type : in case of 0 create Rademacher vectors at level l, in case of 1 create Rademacher vectors at level l->next_level
+  struct sample hutchinson_blind_double( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading ){
+
+    int i, start, end;
+    struct sample estimate;
+
+    compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+
+    for( i=0; i<h->max_iters;i++ ){
+
+      // 1. create Rademacher vector
+      rademacher_create( l, h, type, threading );
+
+      // 2. apply the operator to the Rademacher vector
+      // 3. dot product
+      
+      // 4. compute estimated trace and variance, print something?
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    }
+
+    estimate.sample_size = i;
+    estimate.acc_trace = 0.0;
+
+    return estimate;
+  }
+
+
+  complex_double split_mlmc_hutchinson_diver_double( level_struct *l, struct Thread *threading ){
+
+    complex_double trace = 0.0;
+    struct sample one_sample;
+    hutchinson_double_struct* h = &(l->h_double);
+
+    // TODO : set the pointer to the operator #1
+    one_sample = hutchinson_blind_double( l, h, 1, threading );
+    trace += one_sample.acc_trace/one_sample.sample_size;
+
+    // TODO : set the pointer to the operator #2
+    one_sample = hutchinson_blind_double( l, h, 0, threading );
+    trace += one_sample.acc_trace/one_sample.sample_size;
+
+    return trace;
+  }

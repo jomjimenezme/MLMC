@@ -230,7 +230,10 @@
     
     vector_double mlmc_b1;
     vector_double mlmc_b2;
-    
+
+    // to store the Rademacher vector    
+    vector_double rademacher_vector;
+
     complex_double rt;
     complex_double trace;
        
@@ -244,6 +247,8 @@
     
     // FIXME : make this int a sort of input parameter ?
     int low_tol_restart_length;
+    
+    complex_double (*hutch_op)();
     
   } hutchinson_double_struct;
 
