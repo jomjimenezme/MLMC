@@ -828,7 +828,6 @@
   // -------------------------------------------------------------------
 
 
-
   void rademacher_create( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading );
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
@@ -838,25 +837,15 @@
   gmres_double_struct* get_p_struct_double( level_struct* l );
 
 
-
-
-
-
-
-
-
-
-
-
-
   // type : in case of 0 create Rademacher vectors at level l, in case of 1 create Rademacher vectors at level l->next_level
   struct sample hutchinson_blind_double( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading ){
 
-    int i, start, end;
-    complex_double one_sample;
+    int i, j;
+    complex_double one_sample, variance, trace;
     struct sample estimate;
 
-    compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+    complex_double* sample = (complex_double*) malloc( h->max_iters*sizeof(complex_double) );
+    memset( sample, 0.0, h->max_iters*sizeof(complex_double) );
 
     for( i=0; i<h->max_iters;i++ ){
 
@@ -866,13 +855,24 @@
       // 2. apply the operator to the Rademacher vector
       // 3. dot product
       one_sample = h->hutch_compute_one_sample( l, h, threading );
+      sample[i] = one_sample;
       
       // 4. compute estimated trace and variance, print something?
-    
+      estimate.acc_trace += one_sample;
+
+      if( i!=0 ){
+        variance = 0.0;
+        estimate.sample_size = i+1;
+        trace = estimate.acc_trace/estimate.sample_size;
+        for( j=0; j<i; j++ ){
+          variance += conj(sample[j] - trace) * (sample[j] - trace);
+        }
+        variance = variance / j;
+        printf( "variance = %f+i%f\n", CSPLIT(variance) );
+      }
     }
 
     estimate.sample_size = i;
-    estimate.acc_trace = 0.0;
 
     return estimate;
   }
@@ -907,41 +907,28 @@
     // 2. invert
     // 3. restrict
     {
-      //gmres_double_struct* p = get_p_struct_double( l );
-      gmres_double_struct* p;
-
-      if( l->depth=0 ){
-        p = &(g.p);
-      }
-      else{
-        p = &(l->p_double);
-      }
+      gmres_double_struct* p = get_p_struct_double( l );
 
       apply_P_double( p->b, h->rademacher_vector, l, threading );
       // the input of this solve is p->x, the output p->b
       apply_solver_double( l, threading );
-      //printf( "solver iters = %d\n",  );
-      //apply_R_double( h->mlmc_b1, p->x, l, threading );
+      apply_R_double( h->mlmc_b1, p->x, l, threading );
     }
 
-    printf("blah inside\n");
-
     // SECOND TERM : result stored in h->mlmc_b2
+
     // apply A_{l+1}^{-1}
-    /*
     {
       int start, end;
       gmres_double_struct* p = get_p_struct_double( l->next_level );
       compute_core_start_end( 0, l->next_level->inner_vector_size, &start, &end, l->next_level, threading );
       vector_double_copy( p->b, h->rademacher_vector, start, end, l->next_level );
       // solution of this solve is in l->next_level->p_double.x
-      printf( "solver iters = %d\n", apply_solver_double( l->next_level, threading ) );
+      apply_solver_double( l->next_level, threading );
       vector_double_copy( h->mlmc_b2, l->next_level->p_double.x, start, end, l->next_level );
     }
-    */
 
     // subtract the results and perform dot product
-    /*
     {
       int start, end;
       gmres_double_struct* p = get_p_struct_double( l->next_level );
@@ -949,9 +936,6 @@
       vector_double_minus( h->mlmc_b1, h->mlmc_b1, h->mlmc_b2, start, end, l->next_level ); // compute r = b - w
       return global_inner_product_double( h->rademacher_vector, h->mlmc_b1, p->v_start, p->v_end, l->next_level, threading );   
     }
-    */
-    
-    return 0.0;
   }
 
 
@@ -982,11 +966,6 @@
     else{ error("Unknown value for type of Rademacher vector in relation to level of creation\n"); }
   }
 
-
-
-
-
-
   // apply the interpolation
   void apply_P_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading ){
 
@@ -1013,21 +992,12 @@
   }
 
 
-
   int apply_solver_double( level_struct* l, struct Thread *threading ){
 
     int nr_iters;
     double buff1, buff2;
-    gmres_double_struct* p;
 
-    //gmres_double_struct* p = get_p_struct_double( l );
-
-    if( l->depth=0 ){
-      p = &(g.p);
-    }
-    else{
-      p = &(l->p_double);
-    }
+    gmres_double_struct* p = get_p_struct_double( l );
 
     buff1 = p->tol;
     p->tol = g.tol;
@@ -1047,14 +1017,12 @@
   }
 
 
-
   gmres_double_struct* get_p_struct_double( level_struct* l ){
-    if( l->depth=0 ){
+
+    if( l->depth==0 ){
       return &(g.p);
     }
     else{
       return &(l->p_double);
     }
   }
-
-
