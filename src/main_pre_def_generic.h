@@ -248,7 +248,8 @@
     // FIXME : make this int a sort of input parameter ?
     int low_tol_restart_length;
     
-    complex_double (*hutch_op)();
+    // this functional returns the estimate needed by Hutchinson at each iteration
+    complex_double (*hutch_compute_one_sample)();
     
   } hutchinson_double_struct;
 

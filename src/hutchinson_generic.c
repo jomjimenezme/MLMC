@@ -828,16 +828,82 @@
   // -------------------------------------------------------------------
 
 
+
+  void rademacher_create( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading );
+  complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
+  complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
+
+
+  // type : in case of 0 create Rademacher vectors at level l, in case of 1 create Rademacher vectors at level l->next_level
+  struct sample hutchinson_blind_double( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading ){
+
+    int i, start, end;
+    complex_double one_sample;
+    struct sample estimate;
+
+    compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+
+    for( i=0; i<h->max_iters;i++ ){
+
+      // 1. create Rademacher vector, stored in h->rademacher_vector
+      rademacher_create( l, h, type, threading );
+
+      // 2. apply the operator to the Rademacher vector
+      // 3. dot product
+      one_sample = h->hutch_compute_one_sample( l, h, threading );
+      
+      // 4. compute estimated trace and variance, print something?
+    
+    }
+
+    estimate.sample_size = i;
+    estimate.acc_trace = 0.0;
+
+    return estimate;
+  }
+
+
+  complex_double split_mlmc_hutchinson_diver_double( level_struct *l, struct Thread *threading ){
+
+    complex_double trace = 0.0;
+    struct sample estimate;
+    hutchinson_double_struct* h = &(l->h_double);
+
+    // set the pointer to the split intermediate operator
+    h->hutch_compute_one_sample = hutchinson_split_intermediate;
+    estimate = hutchinson_blind_double( l, h, 1, threading );
+    trace += estimate.acc_trace/estimate.sample_size;
+
+    // set the pointer to the split orthogonal operator
+    h->hutch_compute_one_sample = hutchinson_split_orthogonal;
+    estimate = hutchinson_blind_double( l, h, 0, threading );
+    trace += estimate.acc_trace/estimate.sample_size;
+
+    return trace;
+  }
+
+
   // the term tr( R A_{l}^{-1} P - A_{l+1}^{-1} )
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
 
     // FIRST TERM
 
+    printf("blah inside\n");
+
     // apply A_{l+1}^{-1}
     // TODO
 
     // SECOND TERM
+  }
 
+
+  // the term tr( (I - P_{l} P_{l}^{H}) A_{l}^{-1} )
+  complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
+
+    printf("blah inside\n");
+
+    // apply A_{l+1}^{-1}
+    // TODO
   }
 
 
@@ -858,47 +924,3 @@
     else{ error("Unknown value for type of Rademacher vector in relation to level of creation\n"); }
   }
 
-
-  // type : in case of 0 create Rademacher vectors at level l, in case of 1 create Rademacher vectors at level l->next_level
-  struct sample hutchinson_blind_double( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading ){
-
-    int i, start, end;
-    struct sample estimate;
-
-    compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
-
-    for( i=0; i<h->max_iters;i++ ){
-
-      // 1. create Rademacher vector
-      rademacher_create( l, h, type, threading );
-
-      // 2. apply the operator to the Rademacher vector
-      // 3. dot product
-      
-      // 4. compute estimated trace and variance, print something?
-    
-    }
-
-    estimate.sample_size = i;
-    estimate.acc_trace = 0.0;
-
-    return estimate;
-  }
-
-
-  complex_double split_mlmc_hutchinson_diver_double( level_struct *l, struct Thread *threading ){
-
-    complex_double trace = 0.0;
-    struct sample one_sample;
-    hutchinson_double_struct* h = &(l->h_double);
-
-    // TODO : set the pointer to the operator #1
-    one_sample = hutchinson_blind_double( l, h, 1, threading );
-    trace += one_sample.acc_trace/one_sample.sample_size;
-
-    // TODO : set the pointer to the operator #2
-    one_sample = hutchinson_blind_double( l, h, 0, threading );
-    trace += one_sample.acc_trace/one_sample.sample_size;
-
-    return trace;
-  }

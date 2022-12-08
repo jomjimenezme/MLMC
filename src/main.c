@@ -130,7 +130,7 @@ int main( int argc, char **argv ) {
     // get actual trace
     l.h_double.rough_trace = rtrace;
     l.h_double.rt= rtrace;
-    l.h_double.max_iters = 100;
+    l.h_double.max_iters = 10;
     l.h_double.min_iters = 5;
     l.h_double.trace_tol = 1.0e-3;
     SYNC_MASTER_TO_ALL(threadingx)
