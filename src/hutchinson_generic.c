@@ -831,6 +831,7 @@
   void rademacher_create( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading );
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
+  complex_double hutchinson_coarsest( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   void apply_P_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
   void apply_R_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
   int apply_solver_double( level_struct* l, struct Thread *threading );
@@ -844,8 +845,11 @@
     complex_double one_sample, variance, trace;
     struct sample estimate;
 
-    complex_double* sample = (complex_double*) malloc( h->max_iters*sizeof(complex_double) );
-    memset( sample, 0.0, h->max_iters*sizeof(complex_double) );
+    // TODO : move this allocation to some init function
+    complex_double* samples = (complex_double*) malloc( h->max_iters*sizeof(complex_double) );
+    memset( samples, 0.0, h->max_iters*sizeof(complex_double) );
+
+    estimate.acc_trace = 0.0;
 
     for( i=0; i<h->max_iters;i++ ){
 
@@ -855,7 +859,7 @@
       // 2. apply the operator to the Rademacher vector
       // 3. dot product
       one_sample = h->hutch_compute_one_sample( l, h, threading );
-      sample[i] = one_sample;
+      samples[i] = one_sample;
       
       // 4. compute estimated trace and variance, print something?
       estimate.acc_trace += one_sample;
@@ -865,36 +869,111 @@
         estimate.sample_size = i+1;
         trace = estimate.acc_trace/estimate.sample_size;
         for( j=0; j<i; j++ ){
-          variance += conj(sample[j] - trace) * (sample[j] - trace);
+          variance += conj(samples[j] - trace) * (samples[j] - trace);
         }
         variance = variance / j;
-        printf( "variance = %f+i%f\n", CSPLIT(variance) );
+
+        //printf( "variance = %f+i%f\n", CSPLIT(variance) );
       }
     }
 
     estimate.sample_size = i;
 
+    free(samples);
+
     return estimate;
   }
 
 
-  complex_double split_mlmc_hutchinson_diver_double( level_struct *l, struct Thread *threading ){
+  complex_double split_mlmc_hutchinson_driver_double( level_struct *l, struct Thread *threading ){
 
+    int i;
     complex_double trace = 0.0;
     struct sample estimate;
     hutchinson_double_struct* h = &(l->h_double);
+    level_struct* lx;
 
+    // TODO : add for loop here for all but coarsest level
     // set the pointer to the split intermediate operator
     h->hutch_compute_one_sample = hutchinson_split_intermediate;
     estimate = hutchinson_blind_double( l, h, 1, threading );
     trace += estimate.acc_trace/estimate.sample_size;
 
+    // TODO : add for loop here for all but coarsest level
     // set the pointer to the split orthogonal operator
-    //h->hutch_compute_one_sample = hutchinson_split_orthogonal;
-    //estimate = hutchinson_blind_double( l, h, 0, threading );
-    //trace += estimate.acc_trace/estimate.sample_size;
+    h->hutch_compute_one_sample = hutchinson_split_orthogonal;
+    estimate = hutchinson_blind_double( l, h, 0, threading );
+    trace += estimate.acc_trace/estimate.sample_size;
+
+    // coarsest level
+    // set the pointer to the coarsest-level Hutchinson estimator
+    lx = l;
+    for( i=0; i<g.num_levels-1;i++ ){ lx = lx->next_level; }
+    h->hutch_compute_one_sample = hutchinson_coarsest;
+    estimate = hutchinson_blind_double( lx, h, 0, threading );
+    trace += estimate.acc_trace/estimate.sample_size;
 
     return trace;
+  }
+
+
+  complex_double hutchinson_coarsest( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
+  
+    {
+      int start, end;
+      gmres_double_struct* p = get_p_struct_double( l );
+      compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+
+      vector_double_copy( p->b, h->rademacher_vector, start, end, l );
+    }
+    
+    {
+      apply_solver_double( l, threading );
+    }
+
+    // subtract the results and perform dot product
+    {
+      int start, end;
+      gmres_double_struct* p = get_p_struct_double( l );
+      compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+      return global_inner_product_double( h->rademacher_vector, p->x, p->v_start, p->v_end, l, threading );   
+    }
+  }
+
+
+  // the term tr( (I - P_{l} P_{l}^{H}) A_{l}^{-1} )
+  complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
+
+    // 1. project
+    // 2. invert
+
+    // FIRST TERM
+
+    {
+      int start, end;
+      gmres_double_struct* p = get_p_struct_double( l );
+    
+      apply_R_double( h->mlmc_b2, h->rademacher_vector, l, threading );
+      apply_P_double( h->mlmc_b1, h->mlmc_b2, l, threading );
+      compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+      vector_double_minus( h->mlmc_b1, h->rademacher_vector, h->mlmc_b1, start, end, l );
+
+      vector_double_copy( p->b, h->mlmc_b1, start, end, l );
+    }
+    
+    // SECOND TERM
+
+    {
+      apply_solver_double( l, threading );
+    }
+
+    // subtract the results and perform dot product
+    {
+      int start, end;
+      gmres_double_struct* p = get_p_struct_double( l );
+      compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+      return global_inner_product_double( h->mlmc_b1, p->x, p->v_start, p->v_end, l, threading );   
+    }
   }
 
 
@@ -936,16 +1015,6 @@
       vector_double_minus( h->mlmc_b1, h->mlmc_b1, h->mlmc_b2, start, end, l->next_level ); // compute r = b - w
       return global_inner_product_double( h->rademacher_vector, h->mlmc_b1, p->v_start, p->v_end, l->next_level, threading );   
     }
-  }
-
-
-  // the term tr( (I - P_{l} P_{l}^{H}) A_{l}^{-1} )
-  complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
-
-    printf("blah inside\n");
-
-    // apply A_{l+1}^{-1}
-    // TODO
   }
 
 

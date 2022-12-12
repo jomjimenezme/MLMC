@@ -130,14 +130,14 @@ int main( int argc, char **argv ) {
     // get actual trace
     l.h_double.rough_trace = rtrace;
     l.h_double.rt= rtrace;
-    l.h_double.max_iters = 100;
+    l.h_double.max_iters = 20;
     l.h_double.min_iters = 5;
     l.h_double.trace_tol = 1.0e-3;
     SYNC_MASTER_TO_ALL(threadingx)
     
     //for(int i=1; i<=100; i++)
     //trace = mlmc_hutchinson_diver_double( &l, &threading );
-    trace = split_mlmc_hutchinson_diver_double( &l, &threading );
+    trace = split_mlmc_hutchinson_driver_double( &l, &threading );
 
     START_MASTER(threadingx)
     if(g.my_rank==0) printf("\n... done\n\n");
