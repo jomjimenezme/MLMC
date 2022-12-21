@@ -832,7 +832,7 @@
   complex_double hutchinson_mlmc_difference( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
-  complex_double hutchinson_coarsest( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
+  complex_double hutchinson_plain( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   void apply_P_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
   void apply_R_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
   int apply_solver_double( level_struct* l, struct Thread *threading );
@@ -874,9 +874,10 @@
         }
         variance = variance / j;
 
-        //printf( "variance = %f+i%f\n", CSPLIT(variance) );
       }
     }
+
+    printf( "\tvariance = %f+i%f\n", CSPLIT(variance) );
 
     estimate.sample_size = i;
 
@@ -885,76 +886,126 @@
     return estimate;
   }
 
+
+  complex_double hutchinson_driver_double( level_struct *l, struct Thread *threading ){
+
+    printf( "Trace computation via Hutchinson's method ...\n" );
+
+    int i;
+    complex_double trace = 0.0;
+    struct sample estimate;
+    hutchinson_double_struct* h = &(l->h_double);
+    level_struct* lx;
+
+    printf( "\tfinest (and only) level ...\n" );
+
+    lx = l;
+    // set the pointer to the finest-level Hutchinson estimator
+    h->hutch_compute_one_sample = hutchinson_plain;
+    estimate = hutchinson_blind_double( lx, h, 0, threading );
+    trace += estimate.acc_trace/estimate.sample_size;
+
+    printf( "\t... done\n" );
+
+    printf( "... done\n" );
+
+    return trace;
+  }
+
   
   complex_double mlmc_hutchinson_driver_double( level_struct *l, struct Thread *threading ){
 
+    printf( "Trace computation via 'traditional' difference levels ...\n" );
+
     int i;
     complex_double trace = 0.0;
     struct sample estimate;
     hutchinson_double_struct* h = &(l->h_double);
     level_struct* lx;
-    level_struct* l_buffer =l;
+
+    printf( "\tdifference levels ...\n" );
     
     // for all but coarsest level
-    for( i=0; i<g.num_levels-1;i++ ){  
-    // set the pointer to the mlmc difference operator
-    h->hutch_compute_one_sample = hutchinson_mlmc_difference;
-    estimate = hutchinson_blind_double( l, h, 0, threading );
-    trace += estimate.acc_trace/estimate.sample_size;
-    //printf("\t %f + i%f\n",CSPLIT(trace));
-    l = l->next_level;    
+    lx = l;
+    for( i=0; i<g.num_levels-1;i++ ){
+      // set the pointer to the mlmc difference operator
+      h->hutch_compute_one_sample = hutchinson_mlmc_difference;
+      estimate = hutchinson_blind_double( lx, h, 0, threading );
+      trace += estimate.acc_trace/estimate.sample_size;
+      lx = lx->next_level;
     }
+
+    printf( "\t... done\n" );
+
+    printf( "\tcoarsest level ...\n" );
     
     // coarsest level
     // set the pointer to the coarsest-level Hutchinson estimator
-    lx = l;
-    h->hutch_compute_one_sample = hutchinson_coarsest;
+    h->hutch_compute_one_sample = hutchinson_plain;
     estimate = hutchinson_blind_double( lx, h, 0, threading );
     trace += estimate.acc_trace/estimate.sample_size;
 
+    printf( "\t... done\n" );
+
+    printf( "... done\n" );
+
     return trace;
   }
+
 
   complex_double split_mlmc_hutchinson_driver_double( level_struct *l, struct Thread *threading ){
 
+    printf( "Trace computation via split levels ...\n" );
+
     int i;
     complex_double trace = 0.0;
     struct sample estimate;
     hutchinson_double_struct* h = &(l->h_double);
     level_struct* lx;
-    level_struct* l_buffer =l;
+    
+    printf( "\tfull-rank difference levels ...\n" );
     
     // for all but coarsest level
+    lx = l;
     for( i=0; i<g.num_levels-1;i++ ){  
-    // set the pointer to the split intermediate operator
-    h->hutch_compute_one_sample = hutchinson_split_intermediate;
-    estimate = hutchinson_blind_double( l, h, 1, threading );
-    trace += estimate.acc_trace/estimate.sample_size;
-    
-    l = l->next_level;    
+      // set the pointer to the split intermediate operator
+      h->hutch_compute_one_sample = hutchinson_split_intermediate;
+      estimate = hutchinson_blind_double( lx, h, 1, threading );
+      trace += estimate.acc_trace/estimate.sample_size;
+      lx = lx->next_level;    
     }
-    l = l_buffer;
+
+    printf( "\t... done\n" );
+
+    printf( "\torthogonalized difference levels ...\n" );
     
     // for all but coarsest level
+    lx = l;
     for( i=0; i<g.num_levels-1;i++ ){      
-    // set the pointer to the split orthogonal operator
-    h->hutch_compute_one_sample = hutchinson_split_orthogonal;
-    estimate = hutchinson_blind_double( l, h, 0, threading );
-    trace += estimate.acc_trace/estimate.sample_size;
-    l = l->next_level; 
+      // set the pointer to the split orthogonal operator
+      h->hutch_compute_one_sample = hutchinson_split_orthogonal;
+      estimate = hutchinson_blind_double( lx, h, 0, threading );
+      trace += estimate.acc_trace/estimate.sample_size;
+      lx = lx->next_level; 
     }
+
+    printf( "\t... done\n" );
+
+    printf( "\tcoarsest level ...\n" );
+
     // coarsest level
     // set the pointer to the coarsest-level Hutchinson estimator
-    lx = l;
-    h->hutch_compute_one_sample = hutchinson_coarsest;
+    h->hutch_compute_one_sample = hutchinson_plain;
     estimate = hutchinson_blind_double( lx, h, 0, threading );
     trace += estimate.acc_trace/estimate.sample_size;
+
+    printf( "\t... done\n" );
 
     return trace;
   }
 
 
-  complex_double hutchinson_coarsest( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
+  complex_double hutchinson_plain( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
   
     {
       int start, end;
@@ -1012,6 +1063,8 @@
       return global_inner_product_double( h->mlmc_b1, p->x, p->v_start, p->v_end, l, threading );   
     }
   }
+
+
   // the term tr( A_{l}^{-1} - P A_{l+1}^{-1} R )
   complex_double hutchinson_mlmc_difference( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
 
@@ -1019,7 +1072,7 @@
     // apply A_{l}^{-1}
     {
       int start, end;
-      gmres_double_struct* p = get_p_struct_double( l);
+      gmres_double_struct* p = get_p_struct_double( l );
       compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
       vector_double_copy( p->b, h->rademacher_vector, start, end, l );
       // solution of this solve is in l->p_double.x
@@ -1038,7 +1091,6 @@
       apply_solver_double( l->next_level, threading );
       apply_P_double( h->mlmc_b2, l->next_level->p_double.x, l, threading );
     }
-    
 
     // subtract the results and perform dot product
     {
@@ -1049,6 +1101,7 @@
       return global_inner_product_double( h->rademacher_vector, h->mlmc_b1, p->v_start, p->v_end, l, threading );   
     }
   }
+
 
   // the term tr( R A_{l}^{-1} P - A_{l+1}^{-1} )
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
@@ -1107,6 +1160,7 @@
      }
     else{ error("Unknown value for type of Rademacher vector in relation to level of creation\n"); }
   }
+
 
   // apply the interpolation
   void apply_P_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading ){

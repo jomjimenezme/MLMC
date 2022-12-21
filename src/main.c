@@ -123,30 +123,39 @@ int main( int argc, char **argv ) {
     
     // ------------ Trace with MLMC------------------------------------
     
-    START_MASTER(threadingx)
-    printf("Computing trace through MLMC Hutchinson ...\n");
-    END_MASTER(threadingx)
+    //START_MASTER(threadingx)
+    //printf("Computing trace through MLMC Hutchinson ...\n");
+    //END_MASTER(threadingx)
 
     // get actual trace
     l.h_double.rough_trace = rtrace;
     l.h_double.rt= rtrace;
-    l.h_double.max_iters = 1000;
+    l.h_double.max_iters = 500;
     l.h_double.min_iters = 5;
     l.h_double.trace_tol = 1.0e-3;
     SYNC_MASTER_TO_ALL(threadingx)
     
     //for(int i=1; i<=100; i++)
-    trace = mlmc_hutchinson_driver_double( &l, &threading );
+
+    trace = hutchinson_driver_double( &l, &threading );
+
     START_MASTER(threadingx)
     if(g.my_rank==0) 
-    printf("Resulting trace  = %f+i%f\n", CSPLIT(trace));
+      printf("Resulting trace  = %f+i%f\n\n", CSPLIT(trace));
+    END_MASTER(threadingx)
+
+    trace = mlmc_hutchinson_driver_double( &l, &threading );
+
+    START_MASTER(threadingx)
+    if(g.my_rank==0) 
+      printf("Resulting trace  = %f+i%f\n\n", CSPLIT(trace));
     END_MASTER(threadingx)
     
     trace = split_mlmc_hutchinson_driver_double( &l, &threading );
 
     START_MASTER(threadingx)
     if(g.my_rank==0) 
-    printf("Resulting trace SPLIT = %f+i%f\n", CSPLIT(trace));
+      printf("Resulting trace SPLIT = %f+i%f\n\n", CSPLIT(trace));
     END_MASTER(threadingx)
     // -------------------------------------------------------  
 
