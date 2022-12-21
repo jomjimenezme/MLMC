@@ -590,7 +590,7 @@
         PUBLIC_FREE( h->rademacher_vector, complex_double, l->inner_vector_size );   
     }
     
-    complex_double mlmc_hutchinson_diver_double( level_struct *l, struct Thread *threading ) {
+    complex_double mlmc2_hutchinson_diver_double( level_struct *l, struct Thread *threading ) {
         
         hutchinson_double_struct* h = &(l->h_double) ;
         
@@ -829,6 +829,7 @@
 
 
   void rademacher_create( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading );
+  complex_double hutchinson_mlmc_difference( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_coarsest( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
@@ -884,6 +885,35 @@
     return estimate;
   }
 
+  
+  complex_double mlmc_hutchinson_driver_double( level_struct *l, struct Thread *threading ){
+
+    int i;
+    complex_double trace = 0.0;
+    struct sample estimate;
+    hutchinson_double_struct* h = &(l->h_double);
+    level_struct* lx;
+    level_struct* l_buffer =l;
+    
+    // for all but coarsest level
+    for( i=0; i<g.num_levels-1;i++ ){  
+    // set the pointer to the mlmc difference operator
+    h->hutch_compute_one_sample = hutchinson_mlmc_difference;
+    estimate = hutchinson_blind_double( l, h, 0, threading );
+    trace += estimate.acc_trace/estimate.sample_size;
+    //printf("\t %f + i%f\n",CSPLIT(trace));
+    l = l->next_level;    
+    }
+    
+    // coarsest level
+    // set the pointer to the coarsest-level Hutchinson estimator
+    lx = l;
+    h->hutch_compute_one_sample = hutchinson_coarsest;
+    estimate = hutchinson_blind_double( lx, h, 0, threading );
+    trace += estimate.acc_trace/estimate.sample_size;
+
+    return trace;
+  }
 
   complex_double split_mlmc_hutchinson_driver_double( level_struct *l, struct Thread *threading ){
 
@@ -892,23 +922,30 @@
     struct sample estimate;
     hutchinson_double_struct* h = &(l->h_double);
     level_struct* lx;
-
-    // TODO : add for loop here for all but coarsest level
+    level_struct* l_buffer =l;
+    
+    // for all but coarsest level
+    for( i=0; i<g.num_levels-1;i++ ){  
     // set the pointer to the split intermediate operator
     h->hutch_compute_one_sample = hutchinson_split_intermediate;
     estimate = hutchinson_blind_double( l, h, 1, threading );
     trace += estimate.acc_trace/estimate.sample_size;
-
-    // TODO : add for loop here for all but coarsest level
+    
+    l = l->next_level;    
+    }
+    l = l_buffer;
+    
+    // for all but coarsest level
+    for( i=0; i<g.num_levels-1;i++ ){      
     // set the pointer to the split orthogonal operator
     h->hutch_compute_one_sample = hutchinson_split_orthogonal;
     estimate = hutchinson_blind_double( l, h, 0, threading );
     trace += estimate.acc_trace/estimate.sample_size;
-
+    l = l->next_level; 
+    }
     // coarsest level
     // set the pointer to the coarsest-level Hutchinson estimator
     lx = l;
-    for( i=0; i<g.num_levels-1;i++ ){ lx = lx->next_level; }
     h->hutch_compute_one_sample = hutchinson_coarsest;
     estimate = hutchinson_blind_double( lx, h, 0, threading );
     trace += estimate.acc_trace/estimate.sample_size;
@@ -975,7 +1012,43 @@
       return global_inner_product_double( h->mlmc_b1, p->x, p->v_start, p->v_end, l, threading );   
     }
   }
+  // the term tr( A_{l}^{-1} - P A_{l+1}^{-1} R )
+  complex_double hutchinson_mlmc_difference( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
 
+    // FIRST TERM : result stored in p->x
+    // apply A_{l}^{-1}
+    {
+      int start, end;
+      gmres_double_struct* p = get_p_struct_double( l);
+      compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+      vector_double_copy( p->b, h->rademacher_vector, start, end, l );
+      // solution of this solve is in l->p_double.x
+      apply_solver_double( l, threading );
+    }
+
+    // SECOND TERM : result stored in h->mlmc_b2
+    // 1. Restrict
+    // 2. invert
+    // 3. Prolongate
+    {
+      gmres_double_struct* p = get_p_struct_double( l );
+      
+      apply_R_double( l->next_level->p_double.b, h->rademacher_vector, l, threading );
+      // the input of this solve is l->next_level->p_double.x, the output l->next_level->p_double.b
+      apply_solver_double( l->next_level, threading );
+      apply_P_double( h->mlmc_b2, l->next_level->p_double.x, l, threading );
+    }
+    
+
+    // subtract the results and perform dot product
+    {
+      int start, end;
+      gmres_double_struct* p = get_p_struct_double( l);
+      compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+      vector_double_minus( h->mlmc_b1, p->x, h->mlmc_b2, start, end, l); 
+      return global_inner_product_double( h->rademacher_vector, h->mlmc_b1, p->v_start, p->v_end, l, threading );   
+    }
+  }
 
   // the term tr( R A_{l}^{-1} P - A_{l+1}^{-1} )
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
@@ -1016,7 +1089,7 @@
       return global_inner_product_double( h->rademacher_vector, h->mlmc_b1, p->v_start, p->v_end, l->next_level, threading );   
     }
   }
-
+  
 
   void rademacher_create( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading ){
 
