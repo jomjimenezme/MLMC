@@ -80,16 +80,20 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
   char op_name[50];
   char spec_type[50];
 
-  // dx trace deflation type: 0   // 0 is difference, 1 is non-difference, 2 is no deflation
+  // specify the following in the .ini input file, at different levels
+  // dx trace deflation type: 0   // 0 is difference, 1 is non-difference, 2 is split orthogonal, 3 is no deflation
   // dx trace deflation nr vectors: 10
 
   for( i=0;i<g.num_levels;i++ ){
 
     // in case no deflation is requested
-    if( g.trace_deflation_type[i]==2 ){ continue; }
-    
-    if( g.trace_deflation_type[i]==1 ){ strcpy( op_name,"non-difference" ); }
-    else{ strcpy( op_name,"difference" ); }
+    if( g.trace_deflation_type[i]==3 ){ continue; }
+
+    if( g.trace_deflation_type[i]==0 ){ strcpy( op_name,"difference" ); }
+    else if( g.trace_deflation_type[i]==1 ){ strcpy( op_name,"non-difference" ); }
+    else if( g.trace_deflation_type[i]==2 ){ strcpy( op_name,"split-orthogonal" ); }
+    else{ error0("Uknown type for operator in block power iteration\n"); }
+
     int depth_bp_op = i;
     int nr_bp_vecs = g.trace_deflation_nr_vectors[i];
     double bp_tol = g.trace_powerit_solver_tol[i];
@@ -137,7 +141,7 @@ void block_powerit_double( char* op_name, int depth_bp_op, level_struct *l, stru
   // in the SVs case, this tests the eigenvectors coming out of the Hermitian problem
   test_powerit_quality( op_name, lx, threading );
 
-  // apply gamma5 to the final result
+  // apply gamma5 to the final result, if singular vectors are wanted
   if( strcmp(lx->powerit.spec_type,"SVs")==0 ){
     for( i=0;i<lx->powerit.nr_vecs;i++ ){
       if( lx->depth==0 ){
@@ -176,6 +180,9 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
     SYNC_CORES(threading)
   }
 
+  // FIXME : all these if statements should be changed, and we should use pointers to functions here ...
+  //         or not? Think about this a bit more
+
   if( strcmp(op_name,"non-difference")==0 ){
     // TODO : include threading for setting some values, in this non-difference case
     
@@ -207,11 +214,11 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
       vector_double_copy( lx->powerit.vecs[i], px->x, start, end, lx );
 
       START_MASTER(threading)
-      printf0(".");
+      if (g.my_rank==0) printf(".");
       END_MASTER(threading)
     }
     START_MASTER(threading)
-    printf0("\n");
+    if (g.my_rank==0) printf("\n");
     END_MASTER(threading)
 
     // restore values
@@ -259,7 +266,7 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
       } else {
         restrict_double( pxc->b, px->b, lx, threading );
       }
-      double buff_coarsest_tol, buff_coarse_tol;
+      double buff_coarsest_tol=0, buff_coarse_tol;
       if( lx->next_level->level==0 ){
         buff_coarsest_tol = g.coarse_tol;
         START_MASTER(threading)
@@ -297,11 +304,11 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
       vector_double_minus( lx->powerit.vecs[i], px->x, lx->powerit.vecs_buff2, start, end, lx );
 
       START_MASTER(threading)
-      printf0(".");
+      if (g.my_rank==0) printf(".");
       END_MASTER(threading)
     }
     START_MASTER(threading)
-    printf0("\n");
+    if (g.my_rank==0) printf("\n");
     END_MASTER(threading)
 
     // restore values
@@ -310,6 +317,9 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
     px->x = buff_x;
     px->print = buff_print1;
     g.print = buff_print2;
+  } else if( strcmp(op_name,"split-orthogonal")==0 ) {
+    // TODO : this needs to be implemented!
+    error0("Block power iteration for the split orthogonal operator still needs to be implemented\n");
   } else {
     error0("Unrecognized operator to apply block power iteration\n");
   }
@@ -385,7 +395,7 @@ void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threa
 
     // print the Rayleigh quotient
     START_MASTER(threading)
-    printf0( "Rayleigh quotient = %.16f+i%.16f \t",CSPLIT(rq) );
+    if (g.my_rank==0) printf( "Rayleigh quotient = %.16f+i%.16f \t",CSPLIT(rq) );
     END_MASTER(threading)
 
     // compute the eigenvalue residual
@@ -395,7 +405,7 @@ void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threa
     
     // print the residuals
     START_MASTER(threading)
-    printf0( "Eigenvalue residual = %.16f\n",resx );
+    if (g.my_rank==0) printf( "Eigenvalue residual = %.16f\n",resx );
     END_MASTER(threading)
   }
 

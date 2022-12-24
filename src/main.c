@@ -99,9 +99,9 @@ int main( int argc, char **argv ) {
     method_setup( NULL, &l, &threading );
     // iterative phase
     method_update( l.setup_iter, &l, &threading );
-    
+
     //block_powerit_driver_double( &l, &threading );
-    
+
     hutchinson_diver_double_init( &l, &threading );  
     hutchinson_diver_double_alloc( &l, &threading );
     complex_double trace, rtrace;

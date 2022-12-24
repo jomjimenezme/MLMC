@@ -978,7 +978,7 @@ void read_geometry_data( FILE *in, int ls ) {
     read_parameter( &save_pt, inputstr, "%d", 1, in, _DEFAULT_SET );
 
     sprintf( inputstr, "d%d trace deflation type:", i );
-    save_pt = &(g.trace_deflation_type[i]); g.trace_deflation_type[i] = 2;
+    save_pt = &(g.trace_deflation_type[i]); g.trace_deflation_type[i] = 3;
     read_parameter( &save_pt, inputstr, "%d", 1, in, _DEFAULT_SET );
 
     sprintf( inputstr, "d%d trace deflation nr vectors:", i );
