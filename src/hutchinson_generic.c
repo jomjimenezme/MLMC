@@ -876,9 +876,9 @@
 
       }
     }
-
-    printf( "\tvariance = %f+i%f\n", CSPLIT(variance) );
-
+    START_MASTER(threading);
+    if(g.my_rank==0) printf( "\tvariance = %f+i%f\n", CSPLIT(variance) );
+    END_MASTER(threading);
     estimate.sample_size = i;
 
     free(samples);
@@ -888,16 +888,19 @@
 
 
   complex_double hutchinson_driver_double( level_struct *l, struct Thread *threading ){
-
-    printf( "Trace computation via Hutchinson's method ...\n" );
-
+    
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "Trace computation via Hutchinson's method ...\n" );
+    END_MASTER(thrading);
+    
     int i;
     complex_double trace = 0.0;
     struct sample estimate;
     hutchinson_double_struct* h = &(l->h_double);
     level_struct* lx;
-
-    printf( "\tfinest (and only) level ...\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\tfinest (and only) level ...\n" );
+    END_MASTER(thrading);
 
     lx = l;
     // set the pointer to the finest-level Hutchinson estimator
@@ -905,17 +908,22 @@
     estimate = hutchinson_blind_double( lx, h, 0, threading );
     trace += estimate.acc_trace/estimate.sample_size;
 
-    printf( "\t... done\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\t... done\n" );
+    END_MASTER(thrading);
 
-    printf( "... done\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "... done\n" );
+    END_MASTER(thrading);
 
     return trace;
   }
 
   
   complex_double mlmc_hutchinson_driver_double( level_struct *l, struct Thread *threading ){
-
-    printf( "Trace computation via 'traditional' difference levels ...\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "Trace computation via 'traditional' difference levels ...\n" );
+    END_MASTER(thrading);
 
     int i;
     complex_double trace = 0.0;
@@ -923,7 +931,9 @@
     hutchinson_double_struct* h = &(l->h_double);
     level_struct* lx;
 
-    printf( "\tdifference levels ...\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\tdifference levels ...\n" );
+    END_MASTER(thrading);
     
     // for all but coarsest level
     lx = l;
@@ -934,28 +944,35 @@
       trace += estimate.acc_trace/estimate.sample_size;
       lx = lx->next_level;
     }
-
-    printf( "\t... done\n" );
-
-    printf( "\tcoarsest level ...\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\t... done\n" );
+    END_MASTER(thrading);
+    
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\tcoarsest level ...\n" );
+    END_MASTER(thrading);
     
     // coarsest level
     // set the pointer to the coarsest-level Hutchinson estimator
     h->hutch_compute_one_sample = hutchinson_plain;
     estimate = hutchinson_blind_double( lx, h, 0, threading );
     trace += estimate.acc_trace/estimate.sample_size;
-
-    printf( "\t... done\n" );
-
-    printf( "... done\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\t... done\n" );
+    END_MASTER(thrading);
+    
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "... done\n" );
+    END_MASTER(thrading);
 
     return trace;
   }
 
 
   complex_double split_mlmc_hutchinson_driver_double( level_struct *l, struct Thread *threading ){
-
-    printf( "Trace computation via split levels ...\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "Trace computation via split levels ...\n" );
+    END_MASTER(thrading);
 
     int i;
     complex_double trace = 0.0;
@@ -963,7 +980,9 @@
     hutchinson_double_struct* h = &(l->h_double);
     level_struct* lx;
     
-    printf( "\tfull-rank difference levels ...\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\tfull-rank difference levels ...\n" );
+    END_MASTER(thrading);
     
     // for all but coarsest level
     lx = l;
@@ -974,10 +993,13 @@
       trace += estimate.acc_trace/estimate.sample_size;
       lx = lx->next_level;    
     }
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\t... done\n" );
+    END_MASTER(thrading);
 
-    printf( "\t... done\n" );
-
-    printf( "\torthogonalized difference levels ...\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0) printf( "\torthogonalized difference levels ...\n" );
+    END_MASTER(thrading);
     
     // for all but coarsest level
     lx = l;
@@ -988,10 +1010,14 @@
       trace += estimate.acc_trace/estimate.sample_size;
       lx = lx->next_level; 
     }
+    
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\t... done\n" );
+    END_MASTER(thrading);
 
-    printf( "\t... done\n" );
-
-    printf( "\tcoarsest level ...\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\tcoarsest level ...\n" );
+    END_MASTER(thrading);
 
     // coarsest level
     // set the pointer to the coarsest-level Hutchinson estimator
@@ -999,7 +1025,9 @@
     estimate = hutchinson_blind_double( lx, h, 0, threading );
     trace += estimate.acc_trace/estimate.sample_size;
 
-    printf( "\t... done\n" );
+    START_MASTER(threading);
+    if(g.my_rank==0)  printf( "\t... done\n" );
+    END_MASTER(thrading);
 
     return trace;
   }
@@ -1194,21 +1222,27 @@
     double buff1, buff2;
 
     gmres_double_struct* p = get_p_struct_double( l );
-
+    
     buff1 = p->tol;
     p->tol = g.tol;
+    START_MASTER(threading);
     if( l->level==0 ){
       buff2 = g.coarse_tol;
       g.coarse_tol = g.tol;
     }
+    END_MASTER(threading);
+    SYNC_MASTER_TO_ALL(threading);
 
     nr_iters = fgmres_double( p, l, threading );
-
+    
+    START_MASTER(threading);
     p->tol = buff1;
     if( l->level==0 ){
       g.coarse_tol = buff2;
     }
-    
+    END_MASTER(threading);
+    SYNC_MASTER_TO_ALL(threading);
+
     return nr_iters;
   }
 

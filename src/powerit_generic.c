@@ -63,12 +63,12 @@ void block_powerit_double_free( level_struct* l ){
       if( i==j ){ break; }
       lx = lx->next_level;
     }
-
+/*FIXME This gives seg Fault
     FREE(lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
     FREE(lx->powerit.vecs_buff1, complex_double, lx->vector_size );
     FREE(lx->powerit.vecs_buff2, complex_double, lx->vector_size );
 
-    FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
+    FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );*/
   }
 }
 
