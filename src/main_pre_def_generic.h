@@ -284,14 +284,13 @@
   } profiling_double_struct;
 
   typedef struct {
-    int nr_vecs, nr_cycles;
+    int nr_vecs, nr_cycles,spec_type;
     double bp_tol;
     vector_double* vecs;
     vector_double vecs_buff1;
     vector_double vecs_buff2;
     // buffer to use in Gram Schmidt orthogonalizations
     complex_double* gs_buffer;
-    char spec_type[50];
   } powerit_double_struct;
   
   #ifdef PROFILING

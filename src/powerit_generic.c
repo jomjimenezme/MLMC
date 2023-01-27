@@ -9,7 +9,7 @@ void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threa
 
 
 
-void block_powerit_double_init_and_alloc( char* spec_type, char* op_name, int depth_bp_op, int nr_vecs, int nr_bpi_cycles, double bp_tol, level_struct* l, struct Thread* threading ){
+void block_powerit_double_init_and_alloc( int spec_type, int op_id, int depth_bp_op, int nr_vecs, int nr_bpi_cycles, double bp_tol, level_struct* l, struct Thread* threading ){
 
   START_MASTER(threading)
 
@@ -26,13 +26,13 @@ void block_powerit_double_init_and_alloc( char* spec_type, char* op_name, int de
   lx->powerit.bp_tol = bp_tol;
   lx->powerit.nr_cycles = nr_bpi_cycles;
 
-  strcpy( lx->powerit.spec_type, spec_type );
+  lx->powerit.spec_type = spec_type;
 
   lx->powerit.gs_buffer = NULL;
   MALLOC( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
 
   lx->powerit.vecs = NULL;
-  MALLOC(lx->powerit.vecs, complex_double*, lx->powerit.nr_vecs );
+  MALLOC( lx->powerit.vecs, complex_double*, lx->powerit.nr_vecs );
   lx->powerit.vecs[0] = NULL;
   MALLOC( lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
   for( i=1;i<lx->powerit.nr_vecs;i++ ){
@@ -49,13 +49,15 @@ void block_powerit_double_init_and_alloc( char* spec_type, char* op_name, int de
 }
 
 
-void block_powerit_double_free( level_struct* l ){
+void block_powerit_double_free( level_struct* l, struct Thread* threading ){
+
+  START_MASTER(threading)
 
   int i,j;
 
   for( j=0;j<g.num_levels;j++ ){
     // in case no deflation is requested
-    if( g.trace_deflation_type[j]==2 ){ continue; }
+    if( g.trace_deflation_type[j]==3 ){ continue; }
 
     // access l at the right level
     level_struct* lx = l;
@@ -63,22 +65,22 @@ void block_powerit_double_free( level_struct* l ){
       if( i==j ){ break; }
       lx = lx->next_level;
     }
-/*FIXME This gives seg Fault
-    FREE(lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-    FREE(lx->powerit.vecs_buff1, complex_double, lx->vector_size );
-    FREE(lx->powerit.vecs_buff2, complex_double, lx->vector_size );
 
-    FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );*/
+    FREE( lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+    FREE( lx->powerit.vecs, complex_double*, lx->powerit.nr_vecs );
+    FREE( lx->powerit.vecs_buff1, complex_double, lx->vector_size );
+    FREE( lx->powerit.vecs_buff2, complex_double, lx->vector_size );
+
+    FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
   }
+
+  END_MASTER(threading)
 }
 
 
 void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
 
-  int i;
-
-  char op_name[50];
-  char spec_type[50];
+  int i,op_id,spec_type;
 
   // specify the following in the .ini input file, at different levels
   // dx trace deflation type: 0   // 0 is difference, 1 is non-difference, 2 is split orthogonal, 3 is no deflation
@@ -89,32 +91,50 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
     // in case no deflation is requested
     if( g.trace_deflation_type[i]==3 ){ continue; }
 
-    if( g.trace_deflation_type[i]==0 ){ strcpy( op_name,"difference" ); }
-    else if( g.trace_deflation_type[i]==1 ){ strcpy( op_name,"non-difference" ); }
-    else if( g.trace_deflation_type[i]==2 ){ strcpy( op_name,"split-orthogonal" ); }
-    else{ error0("Uknown type for operator in block power iteration\n"); }
+    switch(g.trace_deflation_type[i]){
+      case 0:
+        op_id = _DIFF_OP;
+        break;
+      case 1:
+        op_id = _NON_DIFF_OP;
+        break;
+      case 2:
+        op_id = _SPLIT_OP;
+      default:
+        error0("Uknown type for operator in block power iteration\n");
+    }
 
     int depth_bp_op = i;
     int nr_bp_vecs = g.trace_deflation_nr_vectors[i];
     double bp_tol = g.trace_powerit_solver_tol[i];
     int nr_bpi_cycles = g.trace_powerit_cycles[i];
-    if( g.trace_powerit_spectrum_type[i]==0 ){ strcpy( spec_type,"EVs" ); }
-    else{ strcpy( spec_type,"SVs" ); }
+
+    switch(g.trace_powerit_spectrum_type[i]){
+      case 0:
+        spec_type = _EVs;
+        break;
+      case 1:
+        spec_type = _SVs;
+        break;
+      default:
+        error0("Uknown type of spectrum to be extracted\n");
+    }
 
     // IMPORTANT :
     //		   -- always call this operation with the finest-level l
     //		   -- after calling power iteration, the result is in lx->powerit.vecs, with lx
     //		      the level struct of the chosen level
-    if( strcmp(op_name,"difference") && depth_bp_op>g.num_levels ){
-      error0("The depth cannot be larger than the total number of levels\n");
+    if( depth_bp_op==(g.num_levels-1) && op_id==_DIFF_OP ){
+      error0("There is no difference level operator at the coarsest level\n");
     }
-    block_powerit_double_init_and_alloc( spec_type, op_name, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, l, threading );
-    block_powerit_double( op_name, depth_bp_op, l, threading );
+
+    block_powerit_double_init_and_alloc( spec_type, op_id, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, l, threading );
+    //block_powerit_double( op_id, depth_bp_op, l, threading );
   }
 }
 
 
-void block_powerit_double( char* op_name, int depth_bp_op, level_struct *l, struct Thread *threading ){
+void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct Thread *threading ){
 
   // access l at the right level
   level_struct* lx = l;
@@ -132,14 +152,14 @@ void block_powerit_double( char* op_name, int depth_bp_op, level_struct *l, stru
 
   for( i=0;i<lx->powerit.nr_cycles;i++ ){
     // apply the operator on the vectors ...
-    bp_op_double_apply( op_name, lx, threading );
+    //bp_op_double_apply( op_name, lx, threading );
     // ... and the resulting vectors are in lx->powerit.vecs
 
     bp_qr_double( lx, threading );
   }
 
   // in the SVs case, this tests the eigenvectors coming out of the Hermitian problem
-  test_powerit_quality( op_name, lx, threading );
+  //test_powerit_quality( op_name, lx, threading );
 
   // apply gamma5 to the final result, if singular vectors are wanted
   if( strcmp(lx->powerit.spec_type,"SVs")==0 ){

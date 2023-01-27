@@ -14,4 +14,7 @@
   complex_double mlmc_hutchinson_driver_double( level_struct *l, struct Thread *threading );
   complex_double split_mlmc_hutchinson_driver_double( level_struct *l, struct Thread *threading );
 
+  // different operators for Hutchinson and block power iteration
+  complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
+
 #endif

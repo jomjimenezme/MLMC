@@ -219,7 +219,11 @@
       _SM1, _SM2, _SM3, _SM4, _SMALL1, _SMALL2, _NUM_PROF }; // _NUM_PROF has always to be the last constant!
   enum { _VTS = 20 };
   enum { _TRCKD_VAL, _STP_TIME, _SLV_ITER, _SLV_TIME, _CRS_ITER, _CRS_TIME, _SLV_ERR, _CGNR_ERR, _NUM_OPTB };
-  
+
+  // these enums is for the different types of operators for block power iteration
+  enum { _DIFF_OP,_NON_DIFF_OP,_SPLIT_OP };
+  enum { _EVs,_SVs };
+
   typedef struct block_struct {
     int start, color, no_comm, *bt;
   } block_struct;

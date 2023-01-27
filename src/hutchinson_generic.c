@@ -831,7 +831,7 @@
   void rademacher_create( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading );
   complex_double hutchinson_mlmc_difference( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
-  complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
+  //complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_plain( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   void apply_P_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
   void apply_R_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );

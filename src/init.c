@@ -374,7 +374,7 @@ void method_setup( vector_double *V, level_struct *l, struct Thread *threading )
 
 void method_free( level_struct *l ) {
 
-  block_powerit_double_free( l );
+  //block_powerit_double_free( l );
 
 #ifdef PERS_COMMS
   level_struct *lx = l;
