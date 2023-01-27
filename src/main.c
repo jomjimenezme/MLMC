@@ -130,13 +130,21 @@ int main( int argc, char **argv ) {
     // get actual trace
     l.h_double.rough_trace = rtrace;
     l.h_double.rt= rtrace;
-    l.h_double.max_iters = 500;
-    l.h_double.min_iters = 5;
-    l.h_double.trace_tol = 1.0e-3;
+    l.h_double.max_iters = 10;
+    l.h_double.min_iters = 10;
+    l.h_double.trace_tol = 1.0e-1;
     SYNC_MASTER_TO_ALL(threadingx)
     
-    //for(int i=1; i<=100; i++)
-
+    
+    //TODO: Is this the right way to distribute work? (code + algorithm)
+    hutchinson_double_struct* h = &(l.h_double);
+    h->tol_per_level = malloc(sizeof(double)*l.depth);
+    h->tol_per_level[0] = sqrt(0.75);
+    h->tol_per_level[1] = sqrt(0.20);
+    h->tol_per_level[2] = sqrt(0.05);
+    
+    
+    
     trace = hutchinson_driver_double( &l, &threading );
 
     START_MASTER(threadingx)

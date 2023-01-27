@@ -844,6 +844,7 @@
 
     int i, j;
     complex_double one_sample, variance, trace;
+    double RMSD;
     struct sample estimate;
 
     // TODO : move this allocation to some init function
@@ -873,11 +874,12 @@
           variance += conj(samples[j] - trace) * (samples[j] - trace);
         }
         variance = variance / j;
-
+        RMSD = sqrt(creal(variance)/j);
+        if( i > h->min_iters && RMSD < cabs(trace) * h->trace_tol * h->tol_per_level[l->depth]) break; 
       }
     }
     START_MASTER(threading);
-    if(g.my_rank==0) printf( "\tvariance = %f+i%f\n", CSPLIT(variance) );
+    if(g.my_rank==0) printf( "%d\t \tvariance = %f+i%f \t d = %.3f\n", i, CSPLIT(variance), h->tol_per_level[l->depth]);
     END_MASTER(threading);
     estimate.sample_size = i;
 

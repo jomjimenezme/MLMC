@@ -241,6 +241,7 @@
     int max_iters, min_iters;
     
     double trace_tol;
+    double *tol_per_level;
     
     // enforcing this at the coarsest level for ~10^-1 solves
     int tmp_length;
@@ -250,6 +251,8 @@
     
     // this functional returns the estimate needed by Hutchinson at each iteration
     complex_double (*hutch_compute_one_sample)();
+    
+    
     
   } hutchinson_double_struct;
 

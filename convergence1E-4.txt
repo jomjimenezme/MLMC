@@ -1,0 +1,54 @@
+
++- subspace correction methods for QCD applications -+
+|                                                    |
+|  Use option >> -? << for help                      |
+|                                                    |
++----------------------------------------------------+
+
+
+Number of Processes: 4
+Program is being started...
+
+
+
++----------------------------------------------------------+
+| The DDalphaAMG solver library.                           |
+| Copyright (C) 2016, Matthias Rottmann, Artur Strebel,    |
+|       Simon Heybrock, Simone Bacchio, Bjoern Leder.      |
+|                                                          |
+| This program comes with ABSOLUTELY NO WARRANTY.          |
++----------------------------------------------------------+
+
+Computing ROUGH trace through PLAIN Hutchinson ...
+
+... done
+
+Trace computation via Hutchinson's method ...
+	finest (and only) level ...
+34295	 	variance = 116.873046+i0.000000 	 d = 0.750
+	... done
+... done
+Resulting trace  = 778.393627+i0.017885
+
+Trace computation via 'traditional' difference levels ...
+	difference levels ...
+80309	 	variance = 98.364170+i0.000000 	 d = 0.750
+	... done
+	coarsest level ...
+100000	 	variance = 62.586070+i0.000000 	 d = 0.200
+	... done
+... done
+Resulting trace  = 778.361290+i0.026669
+
+Trace computation via split levels ...
+	full-rank difference levels ...
+100000	 	variance = 3.344596+i0.000000 	 d = 0.750
+	... done
+	orthogonalized difference levels ...
+40235	 	variance = 54.419567+i0.000000 	 d = 0.750
+	... done
+	coarsest level ...
+100000	 	variance = 62.126918+i0.000000 	 d = 0.200
+	... done
+Resulting trace SPLIT = 778.328103+i-0.001193
+
