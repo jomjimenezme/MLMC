@@ -853,6 +853,7 @@
 
     estimate.acc_trace = 0.0;
 
+    double t0 = MPI_Wtime();
     for( i=0; i<h->max_iters;i++ ){
 
       // 1. create Rademacher vector, stored in h->rademacher_vector
@@ -878,8 +879,10 @@
         if( i > h->min_iters && RMSD < cabs(trace) * h->trace_tol * h->tol_per_level[l->depth]) break; 
       }
     }
+    double t1 = MPI_Wtime();
+
     START_MASTER(threading);
-    if(g.my_rank==0) printf( "%d\t \tvariance = %f+i%f \t d = %.3f\n", i, CSPLIT(variance), h->tol_per_level[l->depth]);
+    if(g.my_rank==0) printf( "%d\t \tvariance = %f+i%f \t t = %f, \t d = %.3f\n", i, CSPLIT(variance), t1-t0, h->tol_per_level[l->depth]);
     END_MASTER(threading);
     estimate.sample_size = i;
 
