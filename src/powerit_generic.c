@@ -11,7 +11,6 @@ void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threa
 
 void block_powerit_double_init_and_alloc( int spec_type, int op_id, int depth_bp_op, int nr_vecs, int nr_bpi_cycles, double bp_tol, level_struct* l, struct Thread* threading ){
 
-  START_MASTER(threading)
 
   int i;
 
@@ -29,29 +28,27 @@ void block_powerit_double_init_and_alloc( int spec_type, int op_id, int depth_bp
   lx->powerit.spec_type = spec_type;
 
   lx->powerit.gs_buffer = NULL;
-  MALLOC( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
+  PUBLIC_MALLOC( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
 
   lx->powerit.vecs = NULL;
-  MALLOC( lx->powerit.vecs, complex_double*, lx->powerit.nr_vecs );
+  PUBLIC_MALLOC( lx->powerit.vecs, complex_double*, lx->powerit.nr_vecs );
   lx->powerit.vecs[0] = NULL;
-  MALLOC( lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  PUBLIC_MALLOC( lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
   for( i=1;i<lx->powerit.nr_vecs;i++ ){
     lx->powerit.vecs[i] = lx->powerit.vecs[0] + i*lx->vector_size;
   }
 
   lx->powerit.vecs_buff1 = NULL;
-  MALLOC( lx->powerit.vecs_buff1, complex_double, lx->vector_size );
+  PUBLIC_MALLOC( lx->powerit.vecs_buff1, complex_double, lx->vector_size );
 
   lx->powerit.vecs_buff2 = NULL;
-  MALLOC( lx->powerit.vecs_buff2, complex_double, lx->vector_size );
+  PUBLIC_MALLOC( lx->powerit.vecs_buff2, complex_double, lx->vector_size );
 
-  END_MASTER(threading)
 }
 
 
 void block_powerit_double_free( level_struct* l, struct Thread* threading ){
 
-  START_MASTER(threading)
 
   int i,j;
 
@@ -66,15 +63,14 @@ void block_powerit_double_free( level_struct* l, struct Thread* threading ){
       lx = lx->next_level;
     }
 
-    FREE( lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-    FREE( lx->powerit.vecs, complex_double*, lx->powerit.nr_vecs );
-    FREE( lx->powerit.vecs_buff1, complex_double, lx->vector_size );
-    FREE( lx->powerit.vecs_buff2, complex_double, lx->vector_size );
+    PUBLIC_FREE( lx->powerit.vecs[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+    PUBLIC_FREE( lx->powerit.vecs, complex_double*, lx->powerit.nr_vecs );
+    PUBLIC_FREE( lx->powerit.vecs_buff1, complex_double, lx->vector_size );
+    PUBLIC_FREE( lx->powerit.vecs_buff2, complex_double, lx->vector_size );
 
-    FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
+    PUBLIC_FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
   }
 
-  END_MASTER(threading)
 }
 
 
