@@ -3,9 +3,9 @@
 
 
 
-void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threading );
+void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading );
 void bp_qr_double( level_struct* lx, struct Thread* threading );
-void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threading );
+void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading );
 
 
 
@@ -86,7 +86,7 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
 
     // in case no deflation is requested
     if( g.trace_deflation_type[i]==3 ){ continue; }
-
+printf("\n%d\n",g.trace_deflation_type[i]);
     switch(g.trace_deflation_type[i]){
       case 0:
         op_id = _DIFF_OP;
@@ -125,7 +125,7 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
     }
 
     block_powerit_double_init_and_alloc( spec_type, op_id, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, l, threading );
-    //block_powerit_double( op_id, depth_bp_op, l, threading );
+    block_powerit_double( op_id, depth_bp_op, l, threading );
   }
 }
 
@@ -148,7 +148,7 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
 
   for( i=0;i<lx->powerit.nr_cycles;i++ ){
     // apply the operator on the vectors ...
-    //bp_op_double_apply( op_name, lx, threading );
+    bp_op_double_apply( op_id, lx, threading );
     // ... and the resulting vectors are in lx->powerit.vecs
 
     bp_qr_double( lx, threading );
@@ -158,7 +158,7 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
   //test_powerit_quality( op_name, lx, threading );
 
   // apply gamma5 to the final result, if singular vectors are wanted
-  if( strcmp(lx->powerit.spec_type,"SVs")==0 ){
+  if( lx->powerit.spec_type ==_SVs ){
     for( i=0;i<lx->powerit.nr_vecs;i++ ){
       if( lx->depth==0 ){
         gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
@@ -177,12 +177,12 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
 
 // auxiliary functions
 
-void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threading ){
+void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading ){
 
   int i;
 
   // apply gamma5 before either operator
-  if( strcmp(lx->powerit.spec_type,"SVs")==0 ){
+  if( lx->powerit.spec_type == _SVs ){
     for( i=0;i<lx->powerit.nr_vecs;i++ ){
       if( lx->depth==0 ){
         gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
@@ -199,7 +199,7 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
   // FIXME : all these if statements should be changed, and we should use pointers to functions here ...
   //         or not? Think about this a bit more
 
-  if( strcmp(op_name,"non-difference")==0 ){
+  if( op_id == _NON_DIFF_OP){
     // TODO : include threading for setting some values, in this non-difference case
     
     int start, end;
@@ -243,7 +243,7 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
     px->b = buff_b;
     px->x = buff_x;
     END_MASTER(threading)
-  } else if( strcmp(op_name,"difference")==0 ) {
+  } else if( op_id == _DIFF_OP ) {
     double buff_tol;
     int buff_print1, buff_print2;
     int start, end;
@@ -333,7 +333,7 @@ void bp_op_double_apply( char* op_name, level_struct* lx, struct Thread* threadi
     px->x = buff_x;
     px->print = buff_print1;
     g.print = buff_print2;
-  } else if( strcmp(op_name,"split-orthogonal")==0 ) {
+  } else if( op_id == _SPLIT_OP) {
     // TODO : this needs to be implemented!
     error0("Block power iteration for the split orthogonal operator still needs to be implemented\n");
   } else {
@@ -349,7 +349,7 @@ void bp_qr_double( level_struct* lx, struct Thread* threading ){
 }
 
 
-void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threading ){
+void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading ){
 
   int i, start, end;
   complex_double** vecs_buff1;
@@ -391,7 +391,7 @@ void test_powerit_quality( char* op_name, level_struct* lx, struct Thread* threa
   }
 
   // apply the operator
-  bp_op_double_apply( op_name, lx, threading );
+  bp_op_double_apply( op_id, lx, threading );
 
   // swap pointers
   START_MASTER(threading)
