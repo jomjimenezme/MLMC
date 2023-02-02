@@ -21,4 +21,5 @@
   void apply_P_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
   void apply_R_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
 
+  int apply_solver_powerit_double( level_struct* l, struct Thread *threading );
 #endif

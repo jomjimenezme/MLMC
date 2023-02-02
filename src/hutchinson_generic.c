@@ -1251,6 +1251,37 @@
     return nr_iters;
   }
 
+  int apply_solver_powerit_double( level_struct* l, struct Thread *threading ){
+
+    int nr_iters;
+   
+    gmres_double_struct* p = get_p_struct_double( l );
+    double buff_coarsest_tol=0, buff_coarse_tol;
+    if( l->level==0 ){
+      buff_coarsest_tol = g.coarse_tol;
+      START_MASTER(threading)
+      g.coarse_tol = l->powerit.bp_tol;
+      END_MASTER(threading)
+    }
+    buff_coarse_tol = p->tol;
+    START_MASTER(threading)
+    p->tol = l->powerit.bp_tol;
+    END_MASTER(threading)
+    SYNC_CORES(threading)
+
+    nr_iters = fgmres_double( p, l, threading );
+
+    if( l->level==0 ){
+      START_MASTER(threading)
+      g.coarse_tol = buff_coarsest_tol;
+      END_MASTER(threading)
+    }
+    START_MASTER(threading)
+    p->tol = buff_coarse_tol;
+    END_MASTER(threading)
+
+    return nr_iters;
+  }
 
   gmres_double_struct* get_p_struct_double( level_struct* l ){
 

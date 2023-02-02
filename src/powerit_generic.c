@@ -155,7 +155,7 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
   }
 
   // in the SVs case, this tests the eigenvectors coming out of the Hermitian problem
-  //test_powerit_quality( op_name, lx, threading );
+  test_powerit_quality( op_id, lx, threading );
 
   // apply gamma5 to the final result, if singular vectors are wanted
   if( lx->powerit.spec_type ==_SVs ){
@@ -278,28 +278,8 @@ void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading )
       // coarse
       apply_R_double(pxc->b, px->b, lx, threading);
       
-      double buff_coarsest_tol=0, buff_coarse_tol;
-      if( lx->next_level->level==0 ){
-        buff_coarsest_tol = g.coarse_tol;
-        START_MASTER(threading)
-        g.coarse_tol = lx->powerit.bp_tol;
-        END_MASTER(threading)
-      }
-      buff_coarse_tol = pxc->tol;
-      START_MASTER(threading)
-      pxc->tol = lx->powerit.bp_tol;
-      END_MASTER(threading)
-      SYNC_CORES(threading)
-      fgmres_double( pxc, lxc, threading );
-      if( lx->next_level->level==0 ){
-        START_MASTER(threading)
-        g.coarse_tol = buff_coarsest_tol;
-        END_MASTER(threading)
-      }
-      START_MASTER(threading)
-      pxc->tol = buff_coarse_tol;
-      END_MASTER(threading)
-      
+      apply_solver_powerit_double(lxc, threading);
+
       apply_P_double(lx->powerit.vecs_buff2, pxc->x, lx, threading);
       
 
