@@ -16,5 +16,9 @@
 
   // different operators for Hutchinson and block power iteration
   complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
+  
+  
+  void apply_P_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
+  void apply_R_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
 
 #endif

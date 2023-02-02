@@ -86,7 +86,7 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
 
     // in case no deflation is requested
     if( g.trace_deflation_type[i]==3 ){ continue; }
-printf("\n%d\n",g.trace_deflation_type[i]);
+
     switch(g.trace_deflation_type[i]){
       case 0:
         op_id = _DIFF_OP;
@@ -276,12 +276,8 @@ void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading )
       SYNC_CORES(threading)
 
       // coarse
-      if( lx->depth==0 ){
-        trans_double( lx->sbuf_double[0], px->b, lx->s_double.op.translation_table, lx, threading );     
-        restrict_double( pxc->b, lx->sbuf_double[0], lx, threading );
-      } else {
-        restrict_double( pxc->b, px->b, lx, threading );
-      }
+      apply_R_double(pxc->b, px->b, lx, threading);
+      
       double buff_coarsest_tol=0, buff_coarse_tol;
       if( lx->next_level->level==0 ){
         buff_coarsest_tol = g.coarse_tol;
@@ -303,12 +299,9 @@ void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading )
       START_MASTER(threading)
       pxc->tol = buff_coarse_tol;
       END_MASTER(threading)
-      if( lx->depth==0 ){
-        interpolate3_double( lx->sbuf_double[1], pxc->x, lx, threading );
-        trans_back_double( lx->powerit.vecs_buff2, lx->sbuf_double[1], lx->s_double.op.translation_table, lx, threading );
-      } else {
-        interpolate3_double( lx->powerit.vecs_buff2, pxc->x, lx, threading );
-      }
+      
+      apply_P_double(lx->powerit.vecs_buff2, pxc->x, lx, threading);
+      
 
       // fine
       START_MASTER(threading)

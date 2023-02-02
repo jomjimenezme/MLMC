@@ -1191,7 +1191,7 @@
       END_MASTER(threading)
       SYNC_MASTER_TO_ALL(threading)
      }
-    else{ error("Unknown value for type of Rademacher vector in relation to level of creation\n"); }
+    else{ error0("Unknown value for type of Rademacher vector in relation to level of creation\n"); }
   }
 
 
