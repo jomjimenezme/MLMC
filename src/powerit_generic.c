@@ -86,7 +86,6 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
 
     // in case no deflation is requested
     if( g.trace_deflation_type[i]==3 ){ continue; }
-
     switch(g.trace_deflation_type[i]){
       case 0:
         op_id = _DIFF_OP;
@@ -96,6 +95,8 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
         break;
       case 2:
         op_id = _SPLIT_OP;
+        break;
+
       default:
         error0("Uknown type for operator in block power iteration\n");
     }
@@ -307,8 +308,61 @@ void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading )
     px->print = buff_print1;
     g.print = buff_print2;
   } else if( op_id == _SPLIT_OP) {
-    // TODO : this needs to be implemented!
-    error0("Block power iteration for the split orthogonal operator still needs to be implemented\n");
+    double buff_tol;
+    int buff_print1, buff_print2;
+    int start, end;
+
+    complex_double* buff_b;
+    complex_double* buff_x;
+    gmres_double_struct* px;
+    if( lx->depth==0 ){ px = &(g.p); } else { px = &(lx->p_double); }
+    level_struct* lxc = lx->next_level;
+    gmres_double_struct* pxc = &(lxc->p_double);
+
+    compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
+
+    // fine
+    buff_tol = px->tol;
+    buff_b = px->b;
+    buff_x = px->x;
+    buff_print1 = px->print;
+    buff_print2 = g.print;
+    START_MASTER(threading)
+    px->tol = lx->powerit.bp_tol;
+    px->print = 0;
+    g.print = 0;
+    END_MASTER(threading)
+
+    for( i=0;i<lx->powerit.nr_vecs;i++ ){
+      START_MASTER(threading)
+      px->b = lx->powerit.vecs[i];
+      END_MASTER(threading)
+      SYNC_CORES(threading)
+
+   //  (I - P_{l} P_{l}^{H}) A_{l}^{-1} 
+      apply_solver_powerit_double(lx, threading);
+      
+      apply_R_double(lx->powerit.vecs_buff1, px->x, lx, threading);
+      apply_P_double(lx->powerit.vecs_buff2, lx->powerit.vecs_buff1, lx, threading);
+      vector_double_minus( lx->powerit.vecs[i], px->x, lx->powerit.vecs_buff2, start, end, lx );
+      
+
+    //TODO: Check the possibilities for this powerit term
+
+      START_MASTER(threading)
+      if (g.my_rank==0) printf(".");
+      END_MASTER(threading)
+    }
+    START_MASTER(threading)
+    if (g.my_rank==0) printf("\n");
+    END_MASTER(threading)
+
+    // restore values
+    px->tol = buff_tol;
+    px->b = buff_b;
+    px->x = buff_x;
+    px->print = buff_print1;
+    g.print = buff_print2;
   } else {
     error0("Unrecognized operator to apply block power iteration\n");
   }
