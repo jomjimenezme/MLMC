@@ -831,6 +831,7 @@
   void rademacher_create( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading );
   complex_double hutchinson_mlmc_difference( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
+  complex_double hutchinson_deflated_split_orthogonal(level_struct *l, hutchinson_double_struct* h, struct Thread *threading);
   //complex_double hutchinson_split_orthogonal( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   complex_double hutchinson_plain( level_struct *l, hutchinson_double_struct* h, struct Thread *threading );
   void apply_P_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
@@ -1010,7 +1011,7 @@
     lx = l;
     for( i=0; i<g.num_levels-1;i++ ){      
       // set the pointer to the split orthogonal operator
-      h->hutch_compute_one_sample = hutchinson_split_orthogonal;
+      h->hutch_compute_one_sample = hutchinson_split_orthogonal;//hutchinson_split_orthogonal;
       estimate = hutchinson_blind_double( lx, h, 0, threading );
       trace += estimate.acc_trace/estimate.sample_size;
       lx = lx->next_level; 
@@ -1073,7 +1074,7 @@
     {
       int start, end;
       gmres_double_struct* p = get_p_struct_double( l );
-    
+
       apply_R_double( h->mlmc_b2, h->rademacher_vector, l, threading );
       apply_P_double( h->mlmc_b1, h->mlmc_b2, l, threading );
       compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
@@ -1097,7 +1098,8 @@
     }
   }
 
-
+  
+  
   // the term tr( A_{l}^{-1} - P A_{l+1}^{-1} R )
   complex_double hutchinson_mlmc_difference( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
 
@@ -1131,10 +1133,55 @@
       gmres_double_struct* p = get_p_struct_double( l);
       compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
       vector_double_minus( h->mlmc_b1, p->x, h->mlmc_b2, start, end, l); 
+
+      //for()
+      if(l->depth ==0 && 1==1){
+
+	for( int i=0;i<l->powerit.nr_vecs;i++ ){
+	  l->powerit.vecs_buff1[i] = global_inner_product_double(l->powerit.vecs[i], h->rademacher_vector, p->v_start, p->v_end, l, threading);	
+	  SYNC_MASTER_TO_ALL(threading)	
+	}
+	
+	START_MASTER(threading)
+	for( int j=start; j< end; j++){
+	  for( int i=0;i< l->powerit.nr_vecs; i++ ){
+	  //if(g.my_rank==0)printf("HEY\t %d, %d\n", start,end);
+	   l->powerit.vecs_buff2[j] = l->powerit.vecs[i][j] * l->powerit.vecs_buff1[i];
+	  }
+        }
+	END_MASTER(threading)
+	SYNC_MASTER_TO_ALL(threading)
+        vector_double_minus(  h->rademacher_vector, h->rademacher_vector, l->powerit.vecs_buff2, start, end, l );
+      }
+	//hutchinson_deflate_vector_double(h->rademacher_vector, l, threading);
+
       return global_inner_product_double( h->rademacher_vector, h->mlmc_b1, p->v_start, p->v_end, l, threading );   
     }
   }
 
+  void hutchinson_deflate_vector_double(vector_double input, level_struct *l, struct Thread *threading ){
+    int start, end;
+    gmres_double_struct* p = get_p_struct_double( l);
+
+    if(l->depth ==0 && 1==1){
+
+      for( int i=0;i<l->powerit.nr_vecs;i++ ){
+        l->powerit.vecs_buff1[i] = global_inner_product_double(l->powerit.vecs[i], input, p->v_start, p->v_end, l, threading);	
+      }
+	
+
+      for( int j=0; j< end; j++){
+	for( int i=0;i< l->powerit.nr_vecs; i++ ){
+	//if(g.my_rank==0)printf("HEY\t %d, %d\n", j,i);
+	  l->powerit.vecs_buff2[j] = l->powerit.vecs[i][j] * l->powerit.vecs_buff1[i];
+	}
+      }
+
+      vector_double_minus(  input, input, l->powerit.vecs_buff2, start, end, l );
+      }
+
+
+}
 
   // the term tr( R A_{l}^{-1} P - A_{l+1}^{-1} )
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
