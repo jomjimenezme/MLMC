@@ -382,38 +382,33 @@ void bp_qr_double( level_struct* lx, struct Thread* threading ){
 void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading ){
 
   int i, start, end;
-  complex_double** vecs_buff1;
-  complex_double** vecs_buff2;
+  vector_double* vecs_buff1;
+  vector_double* vecs_buff2;
 
   gmres_double_struct* px;
   if( lx->depth==0 ){ px = &(g.p); } else { px = &(lx->p_double); }
   compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
 
   vecs_buff1 = NULL;
-  START_MASTER(threading)
-  MALLOC( vecs_buff1, complex_double*, lx->powerit.nr_vecs );
+  vecs_buff2 = NULL;
+  
+  PUBLIC_MALLOC( vecs_buff2, complex_double*, lx->powerit.nr_vecs );
+  PUBLIC_MALLOC( vecs_buff1, complex_double*, lx->powerit.nr_vecs );
+  
   vecs_buff1[0] = NULL;
-  MALLOC( vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  vecs_buff2[0] = NULL;
+  
+  PUBLIC_MALLOC( vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  PUBLIC_MALLOC( vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  
+  START_MASTER(threading)
   for( i=1;i<lx->powerit.nr_vecs;i++ ){
     vecs_buff1[i] = vecs_buff1[0] + i*lx->vector_size;
-  }
-  ((vector_double *)threading->workspace)[0] = vecs_buff1;
-  END_MASTER(threading)
-  SYNC_CORES(threading)
-  vecs_buff1 = ((vector_double *)threading->workspace)[0];
-
-  vecs_buff2 = NULL;
-  START_MASTER(threading)
-  MALLOC( vecs_buff2, complex_double*, lx->powerit.nr_vecs );
-  vecs_buff2[0] = NULL;
-  MALLOC( vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-  for( i=1;i<lx->powerit.nr_vecs;i++ ){
     vecs_buff2[i] = vecs_buff2[0] + i*lx->vector_size;
   }
-  ((vector_double *)threading->workspace)[0] = vecs_buff1;
   END_MASTER(threading)
   SYNC_CORES(threading)
-  vecs_buff1 = ((vector_double *)threading->workspace)[0];
+
 
   // backup of lx->powerit.vecs
   for( i=0;i<lx->powerit.nr_vecs;i++ ){
@@ -445,7 +440,6 @@ void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading
     END_MASTER(threading)
 
     // compute the eigenvalue residual
-     if (g.my_rank==0) printf("\t HEEEERE! \n");
     vector_double_scale( vecs_buff2[i], lx->powerit.vecs[i], rq, start, end, lx );
     vector_double_minus( vecs_buff1[i], vecs_buff1[i], vecs_buff2[i], start, end, lx );
     double resx = global_norm_double( vecs_buff1[i], 0, lx->inner_vector_size, lx, threading );
@@ -456,8 +450,6 @@ void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading
     END_MASTER(threading)
   }
 
-  START_MASTER(threading)
-  FREE( vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-  FREE( vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
-  END_MASTER(threading)
+  PUBLIC_FREE( vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
+  PUBLIC_FREE( vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
 }
