@@ -302,11 +302,14 @@ void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading )
     END_MASTER(threading)
 
     // restore values
+    START_MASTER(threading)
     px->tol = buff_tol;
     px->b = buff_b;
     px->x = buff_x;
     px->print = buff_print1;
     g.print = buff_print2;
+    END_MASTER(threading)
+    SYNC_MASTER_TO_ALL(threading)
   } else if( op_id == _SPLIT_OP) {
     double buff_tol;
     int buff_print1, buff_print2;
@@ -428,7 +431,7 @@ void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading
     vecs_buff1 = buff_ptr;
   }
   END_MASTER(threading)
-
+  SYNC_MASTER_TO_ALL(threading)
   for( i=0;i<lx->powerit.nr_vecs;i++ ){
     // compute the Rayleigh quotient
     complex_double rq;
@@ -442,6 +445,7 @@ void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading
     END_MASTER(threading)
 
     // compute the eigenvalue residual
+     if (g.my_rank==0) printf("\t HEEEERE! \n");
     vector_double_scale( vecs_buff2[i], lx->powerit.vecs[i], rq, start, end, lx );
     vector_double_minus( vecs_buff1[i], vecs_buff1[i], vecs_buff2[i], start, end, lx );
     double resx = global_norm_double( vecs_buff1[i], 0, lx->inner_vector_size, lx, threading );

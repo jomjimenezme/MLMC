@@ -167,7 +167,7 @@ int main( int argc, char **argv ) {
     END_MASTER(threadingx)
     // -------------------------------------------------------  
 
-   */
+   
     trace = mlmc_hutchinson_driver_double( &l, &threading );
 
 
@@ -178,7 +178,7 @@ int main( int argc, char **argv ) {
       printf("Resulting trace  = %f+i%f\n\n", CSPLIT(trace));
     END_MASTER(threadingx)
 
-   
+   */
    
     hutchinson_diver_double_free( &l, &threading );
     block_powerit_double_free( &l, &threading );
