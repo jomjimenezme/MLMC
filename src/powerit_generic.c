@@ -319,8 +319,6 @@ void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading )
     complex_double* buff_x;
     gmres_double_struct* px;
     if( lx->depth==0 ){ px = &(g.p); } else { px = &(lx->p_double); }
-    level_struct* lxc = lx->next_level;
-    gmres_double_struct* pxc = &(lxc->p_double);
 
     compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
 
@@ -418,15 +416,15 @@ void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading
   // apply the operator
   bp_op_double_apply( op_id, lx, threading );
 
-  // swap pointers
+  // swap pointers  
+  complex_double** buff_ptr = lx->powerit.vecs;
+  complex_double** buff_ptr1 = vecs_buff1;    
   START_MASTER(threading)
-  {
-    complex_double** buff_ptr = lx->powerit.vecs;
-    lx->powerit.vecs = vecs_buff1;
+    lx->powerit.vecs = buff_ptr1;
     vecs_buff1 = buff_ptr;
-  }
-  END_MASTER(threading)
+  END_MASTER(threading)  
   SYNC_MASTER_TO_ALL(threading)
+  
   for( i=0;i<lx->powerit.nr_vecs;i++ ){
     // compute the Rayleigh quotient
     complex_double rq;
@@ -449,6 +447,17 @@ void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading
     if (g.my_rank==0) printf( "Eigenvalue residual = %.16f\n",resx );
     END_MASTER(threading)
   }
+  
+  //Restore backup
+  for( i=0;i<lx->powerit.nr_vecs;i++ ){
+    vector_double_copy( lx->powerit.vecs[i], vecs_buff1[i], start, end, lx );
+  }
+  //swap pointers Back
+  START_MASTER(threading)
+    vecs_buff1 = buff_ptr1;
+    lx->powerit.vecs = buff_ptr;
+  END_MASTER(threading)
+  SYNC_MASTER_TO_ALL(threading)
 
   PUBLIC_FREE( vecs_buff1[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
   PUBLIC_FREE( vecs_buff2[0], complex_double, lx->powerit.nr_vecs*lx->vector_size );
