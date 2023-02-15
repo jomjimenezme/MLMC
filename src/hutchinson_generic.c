@@ -391,7 +391,7 @@
       vector_double_plus( l->powerit.vecs_buff1 , l->powerit.vecs_buff3 , l->powerit.vecs_buff2, start, end, l);
 
     }
-    vector_double_minus(  input, input, l->powerit.vecs_buff2, start, end, l );
+    vector_double_minus(  input, input, l->powerit.vecs_buff1, start, end, l );
 
     
   }
