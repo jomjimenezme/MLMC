@@ -366,26 +366,9 @@
       vector_double_minus( h->mlmc_b1, p->x, h->mlmc_b2, start, end, l); 
 
       //for()
-      if(l->depth ==0 && 1==1){
-
-	for( int i=0;i<l->powerit.nr_vecs;i++ ){
-	  l->powerit.vecs_buff1[i] = global_inner_product_double(l->powerit.vecs[i], h->rademacher_vector, p->v_start, p->v_end, l, threading);	
-	  SYNC_MASTER_TO_ALL(threading)	
-	}
-	
-	START_MASTER(threading)
-	for( int j=start; j< end; j++){
-	  for( int i=0;i< l->powerit.nr_vecs; i++ ){
-	  //if(g.my_rank==0)printf("HEY\t %d, %d\n", start,end);
-	   l->powerit.vecs_buff2[j] = l->powerit.vecs[i][j] * l->powerit.vecs_buff1[i];
-	  }
-        }
-	END_MASTER(threading)
-	SYNC_MASTER_TO_ALL(threading)
-        vector_double_minus(  h->rademacher_vector, h->rademacher_vector, l->powerit.vecs_buff2, start, end, l );
+      if(l->depth ==0 && 1==0){
+        hutchinson_deflate_vector_double(h->rademacher_vector, l, threading);
       }
-	//hutchinson_deflate_vector_double(h->rademacher_vector, l, threading);
-
       return global_inner_product_double( h->rademacher_vector, h->mlmc_b1, p->v_start, p->v_end, l, threading );   
     }
   }
@@ -393,26 +376,25 @@
   void hutchinson_deflate_vector_double(vector_double input, level_struct *l, struct Thread *threading ){
     int start, end;
     gmres_double_struct* p = get_p_struct_double( l);
+    compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
 
-  /*  if(l->depth ==0 && 1==1){
-
-      for( int i=0;i<l->powerit.nr_vecs;i++ ){
-        l->powerit.vecs_buff1[i] = global_inner_product_double(l->powerit.vecs[i], input, p->v_start, p->v_end, l, threading);	
+    complex_double aux[l->powerit.nr_vecs];
+  
+    for( int i=0;i<l->powerit.nr_vecs;i++ ){
+        aux[i] = global_inner_product_double(l->powerit.vecs[i], input, p->v_start, p->v_end, l, threading);	
+    }
+    
+    START_MASTER(threading)
+    for( int j=0; j< end; j++){
+      for( int i=0;i< l->powerit.nr_vecs; i++ ){
+        l->powerit.vecs_buff2[j] = l->powerit.vecs[i][j] * aux[i];
       }
-	
-
-      for( int j=0; j< end; j++){
-	for( int i=0;i< l->powerit.nr_vecs; i++ ){
-	//if(g.my_rank==0)printf("HEY\t %d, %d\n", j,i);
-	  l->powerit.vecs_buff2[j] = l->powerit.vecs[i][j] * l->powerit.vecs_buff1[i];
-	}
-      }
-
-      vector_double_minus(  input, input, l->powerit.vecs_buff2, start, end, l );
-      }*/
-
-
-}
+    }
+    END_MASTER(threading)
+    SYNC_MASTER_TO_ALL(threading)
+    
+    vector_double_minus(  input, input, l->powerit.vecs_buff2, start, end, l );
+  }
 
   // the term tr( R A_{l}^{-1} P - A_{l+1}^{-1} )
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){

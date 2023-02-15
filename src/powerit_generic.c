@@ -156,7 +156,7 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
   }
 
   // in the SVs case, this tests the eigenvectors coming out of the Hermitian problem
-  test_powerit_quality( op_id, lx, threading );
+  //test_powerit_quality( op_id, lx, threading );
 
   // apply gamma5 to the final result, if singular vectors are wanted
   if( lx->powerit.spec_type ==_SVs ){

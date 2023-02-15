@@ -130,7 +130,7 @@ int main( int argc, char **argv ) {
     // get actual trace
     l.h_double.rough_trace = rtrace;
     l.h_double.rt= rtrace;
-    l.h_double.max_iters = 500;
+    l.h_double.max_iters = 1000;
     l.h_double.min_iters = 10;
     l.h_double.trace_tol = 1.0e-4;
     SYNC_MASTER_TO_ALL(threadingx)
@@ -167,7 +167,8 @@ int main( int argc, char **argv ) {
     END_MASTER(threadingx)
     // -------------------------------------------------------  
 
-   
+
+   */   
     trace = mlmc_hutchinson_driver_double( &l, &threading );
 
 
@@ -178,7 +179,6 @@ int main( int argc, char **argv ) {
       printf("Resulting trace  = %f+i%f\n\n", CSPLIT(trace));
     END_MASTER(threadingx)
 
-   */
    
     hutchinson_diver_double_free( &l, &threading );
     block_powerit_double_free( &l, &threading );
