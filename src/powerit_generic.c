@@ -26,7 +26,6 @@ void block_powerit_double_init_and_alloc( int spec_type, int op_id, int depth_bp
   lx->powerit.nr_cycles = nr_bpi_cycles;
 
   lx->powerit.spec_type = spec_type;
-
   lx->powerit.gs_buffer = NULL;
   PUBLIC_MALLOC( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
 
@@ -279,11 +278,10 @@ void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading )
       px->b = lx->powerit.vecs[i];
       END_MASTER(threading)
       SYNC_CORES(threading)
-
       // coarse
       apply_R_double(pxc->b, px->b, lx, threading);
       
-      apply_solver_powerit_double(lxc, threading);
+      apply_solver_powerit_double(lx, threading);//solve at next level
 
       apply_P_double(lx->powerit.vecs_buff2, pxc->x, lx, threading);
       
