@@ -285,7 +285,7 @@
 
   typedef struct {
     int nr_vecs, nr_cycles,spec_type;
-    double bp_tol;
+    double bp_tol, tol_buff;
     vector_double* vecs;
     vector_double vecs_buff1;
     vector_double vecs_buff2;

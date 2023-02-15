@@ -281,7 +281,8 @@ void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading )
       // coarse
       apply_R_double(pxc->b, px->b, lx, threading);
       
-      apply_solver_powerit_double(lx, threading);//solve at next level
+      lxc->powerit.tol_buff = lx->powerit.tol_buff;
+      apply_solver_powerit_double(lxc, threading);
 
       apply_P_double(lx->powerit.vecs_buff2, pxc->x, lx, threading);
       

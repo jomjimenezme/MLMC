@@ -510,43 +510,42 @@
 
     return nr_iters;
   }
-//TODO: This only solves at next level
-  int apply_solver_powerit_double( level_struct* lx, struct Thread *threading ){
+
+  
+  int apply_solver_powerit_double( level_struct* l, struct Thread *threading ){
 
     int nr_iters;
-   if (g.my_rank==0) printf("\t HEEEERE! \n");fflush(0);
-
-    gmres_double_struct* p = get_p_struct_double( lx );
-    level_struct* lxc = lx->next_level;
-    gmres_double_struct* pxc = &(lxc->p_double);
-   
+    gmres_double_struct* p = get_p_struct_double( l );
+    
     double buff_coarsest_tol, buff_coarse_tol;
-      if( lx->next_level->level==0 ){
-        buff_coarsest_tol = g.coarse_tol;
-        START_MASTER(threading)
-        g.coarse_tol = lx->powerit.bp_tol;
-        END_MASTER(threading)
-      }
-      buff_coarse_tol = pxc->tol;
+    if( l->level==0 ){
+      buff_coarsest_tol = g.coarse_tol;
       START_MASTER(threading)
-      pxc->tol = lx->powerit.bp_tol;
+      g.coarse_tol = l->powerit.tol_buff;
       END_MASTER(threading)
-      SYNC_CORES(threading)
+    }
 
-      fgmres_double( pxc, lxc, threading );
+    buff_coarse_tol = p->tol;
+    START_MASTER(threading)
+    p->tol = l->powerit.tol_buff;
+    END_MASTER(threading)
+    SYNC_CORES(threading)
 
-      if( lx->next_level->level==0 ){
-        START_MASTER(threading)
-        g.coarse_tol = buff_coarsest_tol;
-        END_MASTER(threading)
-      }
+    fgmres_double( p, l, threading );
+
+    if( l->level==0 ){
       START_MASTER(threading)
-      pxc->tol = buff_coarse_tol;
+      g.coarse_tol = buff_coarsest_tol;
       END_MASTER(threading)
+    }
+    START_MASTER(threading)
+    p->tol = buff_coarse_tol;
+    END_MASTER(threading)
 
     return nr_iters;
   }
 
+  
   gmres_double_struct* get_p_struct_double( level_struct* l ){
 
     if( l->depth==0 ){
