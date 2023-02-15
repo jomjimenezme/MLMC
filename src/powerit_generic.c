@@ -44,6 +44,9 @@ void block_powerit_double_init_and_alloc( int spec_type, int op_id, int depth_bp
   lx->powerit.vecs_buff2 = NULL;
   PUBLIC_MALLOC( lx->powerit.vecs_buff2, complex_double, lx->vector_size );
 
+  lx->powerit.vecs_buff3 = NULL;
+  PUBLIC_MALLOC( lx->powerit.vecs_buff3, complex_double, lx->vector_size );
+
 }
 
 
@@ -67,6 +70,7 @@ void block_powerit_double_free( level_struct* l, struct Thread* threading ){
     PUBLIC_FREE( lx->powerit.vecs, complex_double*, lx->powerit.nr_vecs );
     PUBLIC_FREE( lx->powerit.vecs_buff1, complex_double, lx->vector_size );
     PUBLIC_FREE( lx->powerit.vecs_buff2, complex_double, lx->vector_size );
+    PUBLIC_FREE( lx->powerit.vecs_buff3, complex_double, lx->vector_size );
 
     PUBLIC_FREE( lx->powerit.gs_buffer, complex_double, 2*lx->powerit.nr_vecs );
   }

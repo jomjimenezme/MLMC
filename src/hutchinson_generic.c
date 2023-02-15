@@ -365,8 +365,7 @@
       compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
       vector_double_minus( h->mlmc_b1, p->x, h->mlmc_b2, start, end, l); 
 
-      //for()
-      if(l->depth ==0 && 1==0){
+      if(l->depth ==0 && 1==1){
         hutchinson_deflate_vector_double(h->rademacher_vector, l, threading);
       }
       return global_inner_product_double( h->rademacher_vector, h->mlmc_b1, p->v_start, p->v_end, l, threading );   
@@ -379,21 +378,22 @@
     compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
 
     complex_double aux[l->powerit.nr_vecs];
-  
+    
     for( int i=0;i<l->powerit.nr_vecs;i++ ){
         aux[i] = global_inner_product_double(l->powerit.vecs[i], input, p->v_start, p->v_end, l, threading);	
     }
-    
-    START_MASTER(threading)
-    for( int j=0; j< end; j++){
-      for( int i=0;i< l->powerit.nr_vecs; i++ ){
-        l->powerit.vecs_buff2[j] = l->powerit.vecs[i][j] * aux[i];
-      }
+      
+    vector_double_scale( l->powerit.vecs_buff1 , l->powerit.vecs[0], aux[0], start, end, l);
+    for( int i=1;  i< l->powerit.nr_vecs; i++ ){
+      
+      vector_double_copy(l->powerit.vecs_buff3, l->powerit.vecs_buff1, start, end, l);
+      vector_double_scale( l->powerit.vecs_buff2, l->powerit.vecs[i], aux[i], start, end, l);
+      vector_double_plus( l->powerit.vecs_buff1 , l->powerit.vecs_buff3 , l->powerit.vecs_buff2, start, end, l);
+
     }
-    END_MASTER(threading)
-    SYNC_MASTER_TO_ALL(threading)
-    
     vector_double_minus(  input, input, l->powerit.vecs_buff2, start, end, l );
+
+    
   }
 
   // the term tr( R A_{l}^{-1} P - A_{l+1}^{-1} )
