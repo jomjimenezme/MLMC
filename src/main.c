@@ -21,12 +21,12 @@
  
 #include "main.h"
 
-global_struct g;
+extern global_struct g;
 #ifdef HAVE_HDF5
 Hdf5_fileinfo h5info;
 #endif
-struct common_thread_data *commonthreaddata;
-struct Thread *no_threading;
+extern struct common_thread_data *commonthreaddata;
+extern struct Thread *no_threading;
 
 int main( int argc, char **argv ) {
     
@@ -130,7 +130,7 @@ int main( int argc, char **argv ) {
     // get actual trace
     l.h_double.rough_trace = rtrace;
     l.h_double.rt= rtrace;
-    l.h_double.max_iters = 1000;
+    l.h_double.max_iters = 7500;
     l.h_double.min_iters = 10;
     l.h_double.trace_tol = 1.0e-4;
     SYNC_MASTER_TO_ALL(threadingx)
@@ -167,8 +167,7 @@ int main( int argc, char **argv ) {
     END_MASTER(threadingx)
     // -------------------------------------------------------  
 
-
-   */   
+   */
     trace = mlmc_hutchinson_driver_double( &l, &threading );
 
 
@@ -177,8 +176,10 @@ int main( int argc, char **argv ) {
     START_MASTER(threadingx)
     if(g.my_rank==0) 
       printf("Resulting trace  = %f+i%f\n\n", CSPLIT(trace));
+      printf("\n WITH m0 = %f \n", g.m0);
     END_MASTER(threadingx)
 
+   
    
     hutchinson_diver_double_free( &l, &threading );
     block_powerit_double_free( &l, &threading );

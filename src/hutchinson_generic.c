@@ -108,6 +108,10 @@
         }
         variance = variance / j;
         RMSD = sqrt(creal(variance)/j);
+	START_MASTER(threading);
+        if(g.my_rank==0) printf( "%d\t \tvariance = %f+i%f \t RMSD = %f \n", i, CSPLIT(variance), RMSD);
+        END_MASTER(threading);
+
         if( i > h->min_iters && RMSD < cabs(trace) * h->trace_tol * h->tol_per_level[l->depth]) break; 
       }
     }
@@ -180,7 +184,10 @@
       estimate = hutchinson_blind_double( lx, h, 0, threading );
       trace += estimate.acc_trace/estimate.sample_size;
       lx = lx->next_level;
+      printf("\n\n HEEEELP \n");
+      exit(0);
     }
+    
     START_MASTER(threading);
     if(g.my_rank==0)  printf( "\t... done\n" );
     END_MASTER(thrading);

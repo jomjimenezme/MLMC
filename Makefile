@@ -4,7 +4,7 @@
 CC = mpicc
 
 # --- CFLAGS -----------------------------------------
-CFLAGS_gnu = -std=gnu99 -Wall -pedantic -O3 -ffast-math -fopenmp -lblas -llapack
+CFLAGS_gnu = -std=gnu99 -Wall -pedantic -O3 -ffast-math -fopenmp #-lblas -llapack
 #CFLAGS_intel = -std=gnu99 -Wall -pedantic -O3  -xHOST -qopenmp 
 #CFLAGS = $(CFLAGS_intel)
 CFLAGS = $(CFLAGS_gnu)
@@ -113,7 +113,8 @@ LAPACKE_INCLUDE = $(LAPACKE_DIR)/include
 BLASLIB      = /usr/local/sw/openblas-0.3.5/lib/libopenblas.a
 LAPACKLIB    = $(LAPACK_DIR)/liblapack.a
 LAPACKELIB   = $(LAPACK_DIR)/liblapacke.a
-LAPACK_LIBRARIES = $(BLASLIB) $(LAPACKELIB) $(LAPACKLIB)
+#LAPACK_LIBRARIES = $(BLASLIB) $(LAPACKELIB) $(LAPACKLIB)
+LAPACK_LIBRARIES =
 
 #SPBLAS_DIR = dependencies/spblas
 #SPBLASLIB = $(SPBLAS_DIR)/libsparseblas.a
