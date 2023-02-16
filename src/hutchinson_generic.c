@@ -184,8 +184,8 @@
       estimate = hutchinson_blind_double( lx, h, 0, threading );
       trace += estimate.acc_trace/estimate.sample_size;
       lx = lx->next_level;
-      printf("\n\n HEEEELP \n");
-      exit(0);
+      //printf("\n\n HEEEELP \n");
+      //exit(0);
     }
     
     START_MASTER(threading);
