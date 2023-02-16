@@ -36,3 +36,7 @@
 
 #outputs
 *.txt
+mpi-*
+
+#Configs
+conf/qcdsf.632.01000.mg2
