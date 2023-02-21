@@ -95,17 +95,46 @@ int main( int argc, char **argv ) {
     setup_threading(&threading, commonthreaddata, &l);
     setup_no_threading(no_threading, &l);
 
+    struct Thread *threadingx = &threading;  
     // setup up initial MG hierarchy
+    double t_setup0, t_update0, t_setup1, t_update1;
+    t_setup0 = MPI_Wtime();
     method_setup( NULL, &l, &threading );
-    // iterative phase
-    method_update( l.setup_iter, &l, &threading );
-
-    block_powerit_driver_double( &l, &threading );
+    t_setup1 = MPI_Wtime();
+    START_MASTER(threadingx)
+    if(g.my_rank==0)printf("TIME SETUP DDaAMG %f\n", t_setup1-t_setup0);
+    END_MASTER(threadingx)
+    fflush(0);
     
+    // iterative phase
+    t_update0 = MPI_Wtime();
+    method_update( l.setup_iter, &l, &threading );
+    t_update1 = MPI_Wtime();
+
+    START_MASTER(threadingx)
+    if(g.my_rank==0)printf("TIME UPDATE  DDaAMG %f\n", t_update1-t_update0);
+    END_MASTER(threadingx)
+    fflush(0);
+
+    
+
+    double t_powerit0, t_powerit1;
+    t_powerit0 = MPI_Wtime();
+    //block_powerit_driver_double( &l, &threading );
+    t_powerit1 =MPI_Wtime();
+    START_MASTER(threadingx)
+    if(g.my_rank==0)printf("TIME POWER IT  %f\n", t_powerit1-t_powerit0);
+    END_MASTER(threadingx)
+    fflush(0);
+
+
+  //TODO: KEEP THIS BEFORE ALLOCATING MEMORY OR MOVE TO .ini 
+    l.h_double.max_iters = 2;
+    l.h_double.min_iters = 2;
+    l.h_double.trace_tol = 1.0e-4;
     hutchinson_diver_double_init( &l, &threading );  
     hutchinson_diver_double_alloc( &l, &threading );
     complex_double trace, rtrace;
-    struct Thread *threadingx = &threading;  
 
     
     START_MASTER(threadingx)
@@ -130,9 +159,7 @@ int main( int argc, char **argv ) {
     // get actual trace
     l.h_double.rough_trace = rtrace;
     l.h_double.rt= rtrace;
-    l.h_double.max_iters = 500;
-    l.h_double.min_iters = 10;
-    l.h_double.trace_tol = 1.0e-4;
+   
     SYNC_MASTER_TO_ALL(threadingx)
     
     
@@ -167,8 +194,19 @@ int main( int argc, char **argv ) {
     END_MASTER(threadingx)
     // -------------------------------------------------------  
 
-   */
+
+   */  
+    
+    double t_mlmc0, t_mlmc1;
+    t_mlmc0 = MPI_Wtime();
     trace = mlmc_hutchinson_driver_double( &l, &threading );
+    t_mlmc1 =MPI_Wtime();
+    START_MASTER(threadingx)
+    if(g.my_rank==0)printf("TIME MLMC  %f\n", t_mlmc1-t_mlmc0);
+    END_MASTER(threadingx)
+    fflush(0);
+
+ 
 
 
     //trace = split_mlmc_hutchinson_driver_double( &l, &threading );
@@ -179,9 +217,8 @@ int main( int argc, char **argv ) {
     END_MASTER(threadingx)
 
    
-   
     hutchinson_diver_double_free( &l, &threading );
-    block_powerit_double_free( &l, &threading );
+    //block_powerit_double_free( &l, &threading );
     
   }
 

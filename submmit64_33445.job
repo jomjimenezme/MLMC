@@ -1,0 +1,19 @@
+#!/bin/bash -x
+#SBATCH --account=hwu29
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=16
+#SBATCH --cpus-per-task=4
+#SBATCH --output=mpi-out.%j
+#SBATCH --error=mpi-err.%j
+#SBATCH --time=24:00:00
+#SBATCH --partition=batch
+
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+ 
+module load GCC/11.2.0
+module load OpenMPI/4.1.2
+make clean
+make -j 24
+
+. run -i  "sample64_33445.ini"
+
