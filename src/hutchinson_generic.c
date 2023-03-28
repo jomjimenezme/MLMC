@@ -2,53 +2,53 @@
     #include "main.h"
     
     
-    struct estimate {
-        int counter; //required number of estimates.
-        complex_double estimate;
-    };
+  struct estimate {
+    int counter; //required number of estimates.
+    complex_double estimate;
+  };
 
 
-    struct sample {
-        // required number of estimates
-        int sample_size;
-        // accumulated trace
-        complex_double acc_trace;
-    };
+  struct sample {
+    // required number of estimates
+    int sample_size;
+    // accumulated trace
+    complex_double acc_trace;
+  };
 
 
     
     
-    void hutchinson_diver_double_init( level_struct *l, struct Thread *threading ) {
-        hutchinson_double_struct* h = &(l->h_double);
-        
-        //MLMC
-        h->mlmc_b1 = NULL;
-        
-        h->mlmc_b2 =NULL;
-        
-        h->rademacher_vector =NULL;
-        
-        SYNC_MASTER_TO_ALL(threading)
-    }
+  void hutchinson_diver_double_init( level_struct *l, struct Thread *threading ) {
+    hutchinson_double_struct* h = &(l->h_double);
     
-    void hutchinson_diver_double_alloc( level_struct *l, struct Thread *threading ) {
-        hutchinson_double_struct* h = &(l->h_double) ;
-        
-        //For MLMC
-        PUBLIC_MALLOC( h->mlmc_b1, complex_double, l->inner_vector_size );
-        PUBLIC_MALLOC( h->mlmc_b2, complex_double, l->inner_vector_size );
-        
-        PUBLIC_MALLOC( h->rademacher_vector, complex_double, l->inner_vector_size );
-        
-    }
+    //MLMC
+    h->mlmc_b1 = NULL;
     
-    void hutchinson_diver_double_free( level_struct *l, struct Thread *threading ) {
-        hutchinson_double_struct* h = &(l->h_double) ;
-        
-        PUBLIC_FREE( h->mlmc_b1, complex_double, l->inner_vector_size );   
-        PUBLIC_FREE( h->mlmc_b2, complex_double, l->inner_vector_size );   
-        PUBLIC_FREE( h->rademacher_vector, complex_double, l->inner_vector_size );   
-    }
+    h->mlmc_b2 =NULL;
+    
+    h->rademacher_vector =NULL;
+    
+    SYNC_MASTER_TO_ALL(threading)
+  }
+    
+  void hutchinson_diver_double_alloc( level_struct *l, struct Thread *threading ) {
+    hutchinson_double_struct* h = &(l->h_double) ;
+    
+    //For MLMC
+    PUBLIC_MALLOC( h->mlmc_b1, complex_double, l->inner_vector_size );
+    PUBLIC_MALLOC( h->mlmc_b2, complex_double, l->inner_vector_size );
+    
+    PUBLIC_MALLOC( h->rademacher_vector, complex_double, l->inner_vector_size );
+    
+  }
+    
+  void hutchinson_diver_double_free( level_struct *l, struct Thread *threading ) {
+    hutchinson_double_struct* h = &(l->h_double) ;
+    
+    PUBLIC_FREE( h->mlmc_b1, complex_double, l->inner_vector_size );   
+    PUBLIC_FREE( h->mlmc_b2, complex_double, l->inner_vector_size );   
+    PUBLIC_FREE( h->rademacher_vector, complex_double, l->inner_vector_size );   
+  }
     
 
     
@@ -93,7 +93,9 @@
 
       // 2. apply the operator to the Rademacher vector
       // 3. dot product
+      double t0 = MPI_Wtime();
       one_sample = h->hutch_compute_one_sample( l, h, threading );
+      double t1 = MPI_Wtime();
       samples[i] = one_sample;
       
       // 4. compute estimated trace and variance, print something?
@@ -107,6 +109,9 @@
           variance += conj(samples[j] - trace) * (samples[j] - trace);
         }
         variance = variance / j;
+	    START_MASTER(threading);
+        if(g.my_rank==0) printf( "%d\tVariance:\t%f\tTime:\t%f\n", i, creal(variance),t1-t0);
+        END_MASTER(threading);
         RMSD = sqrt(creal(variance)/j);
         if( i > h->min_iters && RMSD < cabs(trace) * h->trace_tol * h->tol_per_level[l->depth]) break; 
       }
@@ -142,11 +147,14 @@
     lx = l;
     // set the pointer to the finest-level Hutchinson estimator
     h->hutch_compute_one_sample = hutchinson_plain;
+    
+    double t_plain = MPI_Wtime();
     estimate = hutchinson_blind_double( lx, h, 0, threading );
     trace += estimate.acc_trace/estimate.sample_size;
-
+    double t_plain1 = MPI_Wtime();
     START_MASTER(threading);
     if(g.my_rank==0)  printf( "\t... done\n" );
+    if(g.my_rank==0)  printf( "Average solve time %f \n", (t_plain1-t_plain)/h->max_iters );
     END_MASTER(thrading);
 
     START_MASTER(threading);
@@ -283,7 +291,6 @@
     {
       apply_solver_double( l, threading );
     }
-
     // subtract the results and perform dot product
     {
       int start, end;
@@ -336,7 +343,8 @@
 
     // FIRST TERM : result stored in p->x
     // apply A_{l}^{-1}
-    {
+
+    { 
       int start, end;
       gmres_double_struct* p = get_p_struct_double( l );
       compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
@@ -344,7 +352,6 @@
       // solution of this solve is in l->p_double.x
       apply_solver_double( l, threading );
     }
-
     // SECOND TERM : result stored in h->mlmc_b2
     // 1. Restrict
     // 2. invert
@@ -357,7 +364,7 @@
       apply_solver_double( l->next_level, threading );
       apply_P_double( h->mlmc_b2, l->next_level->p_double.x, l, threading );
     }
-
+  
     // subtract the results and perform dot product
     {
       int start, end;
@@ -380,7 +387,7 @@
     complex_double aux[l->powerit.nr_vecs];
     
     for( int i=0;i<l->powerit.nr_vecs;i++ ){
-        aux[i] = global_inner_product_double(l->powerit.vecs[i], input, p->v_start, p->v_end, l, threading);	
+      aux[i] = global_inner_product_double(l->powerit.vecs[i], input, p->v_start, p->v_end, l, threading);	
     }
       
     vector_double_scale( l->powerit.vecs_buff1 , l->powerit.vecs[0], aux[0], start, end, l);
@@ -391,8 +398,8 @@
       vector_double_plus( l->powerit.vecs_buff1 , l->powerit.vecs_buff3 , l->powerit.vecs_buff2, start, end, l);
 
     }
+    
     vector_double_minus(  input, input, l->powerit.vecs_buff1, start, end, l );
-
     
   }
 
@@ -450,7 +457,7 @@
       vector_double_define_random_rademacher( h->rademacher_vector, 0, l->next_level->inner_vector_size, l->next_level );
       END_MASTER(threading)
       SYNC_MASTER_TO_ALL(threading)
-     }
+    }
     else{ error0("Unknown value for type of Rademacher vector in relation to level of creation\n"); }
   }
 
@@ -488,15 +495,15 @@
 
     gmres_double_struct* p = get_p_struct_double( l );
     
+    START_MASTER(threading)
     buff1 = p->tol;
     p->tol = g.tol;
-    START_MASTER(threading);
     if( l->level==0 ){
       buff2 = g.coarse_tol;
       g.coarse_tol = g.tol;
     }
-    END_MASTER(threading);
-    SYNC_MASTER_TO_ALL(threading);
+    END_MASTER(threading)
+    SYNC_MASTER_TO_ALL(threading)
 
     nr_iters = fgmres_double( p, l, threading );
     
@@ -505,8 +512,8 @@
     if( l->level==0 ){
       g.coarse_tol = buff2;
     }
-    END_MASTER(threading);
-    SYNC_MASTER_TO_ALL(threading);
+    END_MASTER(threading)
+    SYNC_MASTER_TO_ALL(threading)
 
     return nr_iters;
   }
@@ -515,32 +522,30 @@
   int apply_solver_powerit_double( level_struct* l, struct Thread *threading ){
 
     int nr_iters;
+    double buff_coarsest_tol, buff_coarse_tol;
+    
     gmres_double_struct* p = get_p_struct_double( l );
     
-    double buff_coarsest_tol, buff_coarse_tol;
+    START_MASTER(threading)
+    buff_coarse_tol = p->tol;
+    p->tol = l->powerit.tol_buff;
     if( l->level==0 ){
       buff_coarsest_tol = g.coarse_tol;
-      START_MASTER(threading)
       g.coarse_tol = l->powerit.tol_buff;
-      END_MASTER(threading)
     }
-
-    buff_coarse_tol = p->tol;
-    START_MASTER(threading)
-    p->tol = l->powerit.tol_buff;
     END_MASTER(threading)
     SYNC_CORES(threading)
 
-    fgmres_double( p, l, threading );
+    nr_iters = fgmres_double( p, l, threading );
 
-    if( l->level==0 ){
-      START_MASTER(threading)
-      g.coarse_tol = buff_coarsest_tol;
-      END_MASTER(threading)
-    }
     START_MASTER(threading)
     p->tol = buff_coarse_tol;
+    if( l->level==0 ){
+      g.coarse_tol = buff_coarsest_tol;
+    }
     END_MASTER(threading)
+    SYNC_MASTER_TO_ALL(threading)
+
 
     return nr_iters;
   }

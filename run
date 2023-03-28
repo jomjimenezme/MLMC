@@ -198,10 +198,9 @@ fi
 if [ ${ipa[0]} = 0  ]
 then
 #   /opt/mpich/ch-p4/bin/mpirun $shareoption -np $np $exec $inputfile
-  #mpirun -np $np $exec $inputfile
+  mpirun -np $np $exec $inputfile
   #$MPIRUN -default-hostfile /etc/openmpi-default-hostfile $shareoption -np $np $NVPROF ./$exec $inputfile
   #scalasca -analyze srun ./$exec $inputfile
-  srun ./$exec $inputfile
 else
   cp $inputfile output/${opf}.txt
   echo "" >> output/${opf}.txt
@@ -211,8 +210,7 @@ else
   echo "+----------------------------------------------------------------------------------+" >> ../output/${opf}.txt
   echo "" >> output/${opf}.txt
   echo "" >> output/${opf}.txt
-  #mpirun -np $np $exec $inputfile >> ../output/${opf}.txt & disown
+  mpirun -np $np $exec $inputfile >> ../output/${opf}.txt & disown
   #$MPIRUN -default-hostfile /etc/openmpi-default-hostfile $shareoption -np $np $NVPROF ./$exec $inputfile >> ../output/${opf}.txt & disown
   #scalasca -analyze srun ./$exec $inputfile >> ../output/${opf}.txt & disown
-  srun ./$exec $inputfile >> ../output/${opf}.txt & disown
 fi
