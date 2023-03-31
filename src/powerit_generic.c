@@ -133,7 +133,7 @@ void two_block_powerit_driver_double( level_struct* l, struct Thread* threading 
   }
 }
 
-void blind_bp_op_double_apply( op_id, lx, threading );
+
 void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct Thread *threading ){
 
   // access l at the right level
@@ -149,6 +149,21 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
   vector_double_define_random( lx->powerit.vecs[0], 0, lx->powerit.nr_vecs*lx->vector_size, lx );
   END_LOCKED_MASTER(threading)
   SYNC_CORES(threading)
+  
+  // apply gamma5 before either operator
+  if( lx->powerit.spec_type == _SVs ){
+    for( i=0;i<lx->powerit.nr_vecs;i++ ){
+      if( lx->depth==0 ){
+        gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
+      }
+      else{
+        int startg5, endg5;
+        compute_core_start_end_custom(0, lx->inner_vector_size, &startg5, &endg5, lx, threading, lx->num_lattice_site_var );
+        coarse_gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], startg5, endg5, lx );
+      }
+    }
+    SYNC_CORES(threading)
+  }
 
   for( i=0;i<lx->powerit.nr_cycles;i++ ){
     // apply the operator on the vectors ...
@@ -700,7 +715,6 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
     }
 
     block_powerit_double_init_and_alloc( spec_type, op_id, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, l, threading );
-    //blind_bp_op_double_apply( depth_bp_op, l, threading );
     block_powerit_double( op_id, depth_bp_op, l, threading );
       
   }

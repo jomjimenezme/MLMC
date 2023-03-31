@@ -7,6 +7,11 @@
 
   void block_powerit_driver_double( level_struct* l, struct Thread* threading );
   
+  void blind_bp_op_double_apply( op_id, lx, threading );
+  void powerit_non_diff_op( level_struct *l, int i, struct Thread *threading );
+  void powerit_diff_op( level_struct *l, int i, struct Thread *threading );
+  void powerit_split_op( level_struct *l, int i, struct Thread *threading );
+  
   // this functional aplies anoperator to a bp vector 
   void (*apply_to_one_vector)();
 
