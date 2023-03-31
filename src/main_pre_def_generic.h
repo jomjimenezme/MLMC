@@ -295,8 +295,6 @@
     complex_double* gs_buffer;
     
     
-     // this functional aplies anoperator to a bp vector 
-    void (*apply_to_one_vector)();
     
   } powerit_double_struct;
   
