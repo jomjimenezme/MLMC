@@ -20,6 +20,7 @@
   
   void apply_P_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
   void apply_R_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
+  gmres_double_struct* get_p_struct_double( level_struct* l );
 
   int apply_solver_powerit_double( level_struct* l, struct Thread *threading );
 #endif

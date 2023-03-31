@@ -372,9 +372,9 @@
       compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
       vector_double_minus( h->mlmc_b1, p->x, h->mlmc_b2, start, end, l); 
 
-      if(l->depth ==0 && 1==0){
+      //if(l->depth ==0 && 1==0){  //Deflate from the left. (I-VV^*)Op
         hutchinson_deflate_vector_double(h->rademacher_vector, l, threading);
-      }
+      //}
       return global_inner_product_double( h->rademacher_vector, h->mlmc_b1, p->v_start, p->v_end, l, threading );   
     }
   }
