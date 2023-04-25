@@ -197,7 +197,7 @@ int main( int argc, char **argv ) {
 
    */  
     
-    double t_mlmc0, t_mlmc1;
+  /*  double t_mlmc0, t_mlmc1;
     t_mlmc0 = MPI_Wtime();
     trace = mlmc_hutchinson_driver_double( &l, &threading );
     t_mlmc1 =MPI_Wtime();
@@ -215,7 +215,7 @@ int main( int argc, char **argv ) {
     if(g.my_rank==0) 
       printf("Resulting trace  = %f+i%f\n\n", CSPLIT(trace));
     END_MASTER(threadingx)
-
+*/
    
     hutchinson_diver_double_free( &l, &threading );
     //block_powerit_double_free( &l, &threading );

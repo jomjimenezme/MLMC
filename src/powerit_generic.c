@@ -6,8 +6,9 @@
 void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading );
 void bp_qr_double( level_struct* lx, struct Thread* threading );
 void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading );
-
-
+void blind_bp_op_double_apply( op_id, lx, threading );
+// this functional aplies anoperator to a bp vector 
+  void (*apply_to_one_vector)();
 
 void block_powerit_double_init_and_alloc( int spec_type, int op_id, int depth_bp_op, int nr_vecs, int nr_bpi_cycles, double bp_tol, level_struct* l, struct Thread* threading ){
 
@@ -149,21 +150,6 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
   vector_double_define_random( lx->powerit.vecs[0], 0, lx->powerit.nr_vecs*lx->vector_size, lx );
   END_LOCKED_MASTER(threading)
   SYNC_CORES(threading)
-  
-  // apply gamma5 before either operator
-  if( lx->powerit.spec_type == _SVs ){
-    for( i=0;i<lx->powerit.nr_vecs;i++ ){
-      if( lx->depth==0 ){
-        gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
-      }
-      else{
-        int startg5, endg5;
-        compute_core_start_end_custom(0, lx->inner_vector_size, &startg5, &endg5, lx, threading, lx->num_lattice_site_var );
-        coarse_gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], startg5, endg5, lx );
-      }
-    }
-    SYNC_CORES(threading)
-  }
 
   for( i=0;i<lx->powerit.nr_cycles;i++ ){
     // apply the operator on the vectors ...
@@ -176,7 +162,7 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
   }
 
   // in the SVs case, this tests the eigenvectors coming out of the Hermitian problem
-  //test_powerit_quality( op_id, lx, threading );
+  test_powerit_quality( op_id, lx, threading );
 
   // apply gamma5 to the final result, if singular vectors are wanted
   if( lx->powerit.spec_type ==_SVs ){
@@ -444,7 +430,7 @@ void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading
   }
 
   // apply the operator
-  bp_op_double_apply( op_id, lx, threading );
+  blind_bp_op_double_apply( op_id, lx, threading );
 
   // swap pointers  
   complex_double** buff_ptr = lx->powerit.vecs;
@@ -548,17 +534,13 @@ void powerit_diff_op( level_struct *l, int i, struct Thread *threading ){
   
   int start, end;    
   
-  
-  // fine
   gmres_double_struct* p = get_p_struct_double( l );
   compute_core_start_end( p->v_start, p->v_end, &start, &end, l, threading );
+  
       
-  fgmres_double( p, l, threading );
-  
-  
   // coarse
   level_struct* lxc = l->next_level;
-  gmres_double_struct* pxc = &(lxc->p_double);
+  gmres_double_struct* pxc = get_p_struct_double(lxc);
 
   apply_R_double(pxc->b, p->b, l, threading);     
  
@@ -567,13 +549,18 @@ void powerit_diff_op( level_struct *l, int i, struct Thread *threading ){
 
   apply_P_double(l->powerit.vecs_buff2, pxc->x, l, threading);
   
+  // fine
+  
+  START_MASTER(threading)
+  p->x = l->powerit.vecs_buff1;
+  END_MASTER(threading)
+  SYNC_CORES(threading)
+  fgmres_double( p, l, threading );
+  
 
   vector_double_minus( l->powerit.vecs[i], p->x, l->powerit.vecs_buff2, start, end, l );
-  
-              // if(g.my_rank==0)printf("\n\n------------------DIFFerencee--------------- ");
-
+            //if(g.my_rank==0)printf("\n\n------------------DIFFerencee---------------\n depth = %d \n ", l->depth);
    
-
 }
 
 void powerit_split_op( level_struct *l, int i, struct Thread *threading ){
@@ -595,7 +582,8 @@ void powerit_split_op( level_struct *l, int i, struct Thread *threading ){
 
   //TODO: where to put this?
   // apply gamma5 before either operator
-  /*if( lx->powerit.spec_type == _SVs ){
+     int i;
+  if( lx->powerit.spec_type == _SVs ){
     for( i=0;i<lx->powerit.nr_vecs;i++ ){
       if( lx->depth==0 ){
         gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
@@ -607,9 +595,8 @@ void powerit_split_op( level_struct *l, int i, struct Thread *threading ){
       }
     }
     SYNC_CORES(threading)
-  }*/
+  }
   
-  int start, end;
   double buff_tol;
 
   complex_double* buff_b;
@@ -643,7 +630,7 @@ void powerit_split_op( level_struct *l, int i, struct Thread *threading ){
   double t1 = MPI_Wtime();
   START_MASTER(threading)
   if (g.my_rank==0) printf("\n");
-  if (g.my_rank==0) printf("time block : %f\n", t1-t0);
+  //if (g.my_rank==0) printf("time block : %f\n", t1-t0);
   END_MASTER(threading)
 
   // restore values
@@ -715,6 +702,7 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
     }
 
     block_powerit_double_init_and_alloc( spec_type, op_id, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, l, threading );
+    //blind_bp_op_double_apply( depth_bp_op, l, threading );
     block_powerit_double( op_id, depth_bp_op, l, threading );
       
   }
@@ -728,3 +716,4 @@ void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
         
 
         
+
