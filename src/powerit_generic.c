@@ -456,7 +456,7 @@ void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading
     // compute the eigenvalue residual
     vector_double_scale( vecs_buff2[i], lx->powerit.vecs[i], rq, start, end, lx );
     vector_double_minus( vecs_buff1[i], vecs_buff1[i], vecs_buff2[i], start, end, lx );
-    double resx = global_norm_double( vecs_buff1[i], 0, lx->inner_vector_size, lx, threading );
+    double resx = global_norm_double( vecs_buff1[i], 0, lx->inner_vector_size, lx, threading ) / ( cabs(rq)*norm );
     
     // print the residuals
     START_MASTER(threading)

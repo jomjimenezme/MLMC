@@ -13,6 +13,7 @@
     int sample_size;
     // accumulated trace
     complex_double acc_trace;
+    complex_double direct_trace;
   };
 
 
@@ -85,6 +86,8 @@
 
     estimate.acc_trace = 0.0;
 
+    // stochastic part
+
     double t0 = MPI_Wtime();
     for( i=0; i<h->max_iters;i++ ){
 
@@ -103,8 +106,7 @@
 
       if( i!=0 ){
         variance = 0.0;
-        estimate.sample_size = i+1;
-        trace = estimate.acc_trace/estimate.sample_size;
+        trace = estimate.acc_trace/(i+1);
         for( j=0; j<i; j++ ){
           variance += conj(samples[j] - trace) * (samples[j] - trace);
         }
@@ -122,6 +124,27 @@
     if(g.my_rank==0) printf( "%d\t \tvariance = %f+i%f \t t = %f, \t d = %.3f\n", i, CSPLIT(variance), t1-t0, h->tol_per_level[l->depth]);
     END_MASTER(threading);
     estimate.sample_size = i;
+
+    // direct part
+
+    double t0 = MPI_Wtime();
+    estimate.direct_trace = 0.0;
+    for( i=0; i<l->powerit.nr_vecs;i++ ){
+
+      // 0. create small matrix to store all dot products, let's call it small_T
+      // TODO ...
+
+      // 1. apply the operator on the ith deflation vector
+      // TODO ...
+
+      // 2. dot product (do only the diagonal ones)
+      // TODO ...
+
+      // 3. take trace of small_T, store in estimate.direct_trace
+      // TODO ...
+
+    }
+    double t1 = MPI_Wtime();
 
     free(samples);
 
@@ -279,7 +302,9 @@
 
 
   complex_double hutchinson_plain( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
-  
+
+    // TODO : deflate .. depends, left, right, or both. For now, focus on : deflating from the left
+
     {
       int start, end;
       gmres_double_struct* p = get_p_struct_double( l );
