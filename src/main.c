@@ -120,7 +120,7 @@ int main( int argc, char **argv ) {
 
     double t_powerit0, t_powerit1;
     t_powerit0 = MPI_Wtime();
-   // block_powerit_driver_double( &l, &threading );
+    block_powerit_driver_double( &l, &threading );
     t_powerit1 =MPI_Wtime();
     START_MASTER(threadingx)
     if(g.my_rank==0)printf("TIME POWER IT  %f\n", t_powerit1-t_powerit0);

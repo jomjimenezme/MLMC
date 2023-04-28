@@ -3,12 +3,7 @@
 
 
 
-void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading );
-void bp_qr_double( level_struct* lx, struct Thread* threading );
-void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading );
-void blind_bp_op_double_apply( op_id, lx, threading );
-// this functional aplies anoperator to a bp vector 
-  void (*apply_to_one_vector)();
+
 
 void block_powerit_double_init_and_alloc( int spec_type, int op_id, int depth_bp_op, int nr_vecs, int nr_bpi_cycles, double bp_tol, level_struct* l, struct Thread* threading ){
 
@@ -78,7 +73,7 @@ void block_powerit_double_free( level_struct* l, struct Thread* threading ){
 }
 
 
-void two_block_powerit_driver_double( level_struct* l, struct Thread* threading ){
+void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
 
   int i,op_id,spec_type;
 
@@ -87,18 +82,19 @@ void two_block_powerit_driver_double( level_struct* l, struct Thread* threading 
   // dx trace deflation nr vectors: 10
 
   for( i=0;i<g.num_levels;i++ ){
+             // if(g.my_rank==0)printf("\nLevel and request--------------- %d request: %d\n", i, g.trace_deflation_type[i]);
 
     // in case no deflation is requested
     if( g.trace_deflation_type[i]==3 ){ continue; }
     switch(g.trace_deflation_type[i]){
       case 0:
-        op_id = _DIFF_OP;
+        apply_to_one_vector = powerit_diff_op; op_id = _NON_DIFF_OP;
         break;
       case 1:
-        op_id = _NON_DIFF_OP;
+        apply_to_one_vector = powerit_non_diff_op; op_id = _NON_DIFF_OP;
         break;
       case 2:
-        op_id = _SPLIT_OP;
+        apply_to_one_vector = powerit_split_op; op_id = _SPLIT_OP;
         break;
 
       default:
@@ -125,14 +121,17 @@ void two_block_powerit_driver_double( level_struct* l, struct Thread* threading 
     //		   -- always call this operation with the finest-level l
     //		   -- after calling power iteration, the result is in lx->powerit.vecs, with lx
     //		      the level struct of the chosen level
-    if( depth_bp_op==(g.num_levels-1) && op_id==_DIFF_OP ){
+    if( depth_bp_op==(g.num_levels-1) && apply_to_one_vector == powerit_diff_op){
       error0("There is no difference level operator at the coarsest level\n");
     }
 
     block_powerit_double_init_and_alloc( spec_type, op_id, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, l, threading );
+    //blind_bp_op_double_apply( depth_bp_op, l, threading );
     block_powerit_double( op_id, depth_bp_op, l, threading );
+      
   }
 }
+
 
 
 void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct Thread *threading ){
@@ -154,10 +153,8 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
   for( i=0;i<lx->powerit.nr_cycles;i++ ){
     // apply the operator on the vectors ...
     blind_bp_op_double_apply( op_id, lx, threading );
-    //bp_op_double_apply( op_id, lx, threading );
-
     // ... and the resulting vectors are in lx->powerit.vecs
-
+    //orthogonalize
     bp_qr_double( lx, threading );
   }
 
@@ -180,210 +177,6 @@ void block_powerit_double( int op_id, int depth_bp_op, level_struct *l, struct T
   }
 }
 
-
-
-// auxiliary functions
-
-void bp_op_double_apply( int op_id, level_struct* lx, struct Thread* threading ){
-
-  int i;
-
-  // apply gamma5 before either operator
-  if( lx->powerit.spec_type == _SVs ){
-    for( i=0;i<lx->powerit.nr_vecs;i++ ){
-      if( lx->depth==0 ){
-        gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], lx, threading );
-      }
-      else{
-        int startg5, endg5;
-        compute_core_start_end_custom(0, lx->inner_vector_size, &startg5, &endg5, lx, threading, lx->num_lattice_site_var );
-        coarse_gamma5_double( lx->powerit.vecs[i], lx->powerit.vecs[i], startg5, endg5, lx );
-      }
-    }
-    SYNC_CORES(threading)
-  }
-
-  // FIXME : all these if statements should be changed, and we should use pointers to functions here ...
-  //         or not? Think about this a bit more
-
-  if( op_id == _NON_DIFF_OP){
-    // TODO : include threading for setting some values, in this non-difference case
-    
-    int start, end;
-    double buff_tol;
-    complex_double* buff_b;
-    complex_double* buff_x;
-    gmres_double_struct* px;
-    if( lx->depth==0 ){ px = &(g.p); } else { px = &(lx->p_double); }
-
-    compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
-
-    buff_tol = px->tol;
-    buff_b = px->b;
-    buff_x = px->x;
-
-    START_MASTER(threading)
-    px->tol = lx->powerit.bp_tol;
-    END_MASTER(threading)
-    double t0 = MPI_Wtime();
-    for( i=0;i<lx->powerit.nr_vecs;i++ ){
-      START_MASTER(threading)
-      px->b = lx->powerit.vecs[i];
-      px->x = lx->powerit.vecs_buff1;
-      END_MASTER(threading)
-
-      fgmres_double( px, lx, threading );
-      
-      vector_double_copy( lx->powerit.vecs[i], px->x, start, end, lx );
-
-      START_MASTER(threading)
-      if (g.my_rank==0) printf(".");
-      END_MASTER(threading)
-    }
-    
-    double t1 = MPI_Wtime();
-    START_MASTER(threading)
-    if (g.my_rank==0) printf("\n");
-    if (g.my_rank==0) printf("time block : %f\n", t1-t0);
-    END_MASTER(threading)
-
-    // restore values
-    START_MASTER(threading)
-    px->tol = buff_tol;
-    px->b = buff_b;
-    px->x = buff_x;
-    END_MASTER(threading)
-  } else if( op_id == _DIFF_OP ) {
-    double buff_tol;
-    int buff_print1, buff_print2;
-    int start, end;
-
-    complex_double* buff_b;
-    complex_double* buff_x;
-    gmres_double_struct* px;
-    if( lx->depth==0 ){ px = &(g.p); } else { px = &(lx->p_double); }
-    level_struct* lxc = lx->next_level;
-    gmres_double_struct* pxc = &(lxc->p_double);
-
-    compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
-
-    // fine
-    buff_tol = px->tol;
-    buff_b = px->b;
-    buff_x = px->x;
-    buff_print1 = px->print;
-    buff_print2 = g.print;
-    START_MASTER(threading)
-    px->tol = lx->powerit.bp_tol;
-    px->print = 0;
-    g.print = 0;
-    END_MASTER(threading)
-
-    double t0 = MPI_Wtime();
-    for( i=0;i<lx->powerit.nr_vecs;i++ ){
-      START_MASTER(threading)
-      px->b = lx->powerit.vecs[i];
-      END_MASTER(threading)
-      SYNC_CORES(threading)
-      // coarse
-      apply_R_double(pxc->b, px->b, lx, threading);
-      
-      lxc->powerit.tol_buff = lx->powerit.tol_buff;
-      apply_solver_powerit_double(lxc, threading);
-
-      apply_P_double(lx->powerit.vecs_buff2, pxc->x, lx, threading);
-      
-
-      // fine
-      START_MASTER(threading)
-      px->x = lx->powerit.vecs_buff1;
-      END_MASTER(threading)
-      SYNC_CORES(threading)
-      fgmres_double( px, lx, threading );
-
-      vector_double_minus( lx->powerit.vecs[i], px->x, lx->powerit.vecs_buff2, start, end, lx );
-
-      START_MASTER(threading)
-      if (g.my_rank==0) printf(".");
-      END_MASTER(threading)
-    }
-    
-      double t1 = MPI_Wtime();
-      START_MASTER(threading)
-      if (g.my_rank==0) printf("\n");
-      if (g.my_rank==0) printf("time block : %f\n", t1-t0);
-      END_MASTER(threading)
-      
-    // restore values
-    START_MASTER(threading)
-    px->tol = buff_tol;
-    px->b = buff_b;
-    px->x = buff_x;
-    px->print = buff_print1;
-    g.print = buff_print2;
-    END_MASTER(threading)
-    SYNC_MASTER_TO_ALL(threading)
-  } else if( op_id == _SPLIT_OP) {
-    double buff_tol;
-    int buff_print1, buff_print2;
-    int start, end;
-
-    complex_double* buff_b;
-    complex_double* buff_x;
-    gmres_double_struct* px;
-    if( lx->depth==0 ){ px = &(g.p); } else { px = &(lx->p_double); }
-
-    compute_core_start_end(px->v_start, px->v_end, &start, &end, lx, threading);
-
-    // fine
-    buff_tol = px->tol;
-    buff_b = px->b;
-    buff_x = px->x;
-    buff_print1 = px->print;
-    buff_print2 = g.print;
-    START_MASTER(threading)
-    px->tol = lx->powerit.bp_tol;
-    px->print = 0;
-    g.print = 0;
-    END_MASTER(threading)
-
-    double t0 = MPI_Wtime();
-    for( i=0;i<lx->powerit.nr_vecs;i++ ){
-      START_MASTER(threading)
-      px->b = lx->powerit.vecs[i];
-      END_MASTER(threading)
-      SYNC_CORES(threading)
-
-   //  (I - P_{l} P_{l}^{H}) A_{l}^{-1} 
-      apply_solver_powerit_double(lx, threading);
-      
-      apply_R_double(lx->powerit.vecs_buff1, px->x, lx, threading);
-      apply_P_double(lx->powerit.vecs_buff2, lx->powerit.vecs_buff1, lx, threading);
-      vector_double_minus( lx->powerit.vecs[i], px->x, lx->powerit.vecs_buff2, start, end, lx );
-      
-
-    //TODO: Check the possibilities for this powerit term
-
-      START_MASTER(threading)
-      if (g.my_rank==0) printf(".");
-      END_MASTER(threading)
-    }
-      double t1 = MPI_Wtime();
-      START_MASTER(threading)
-      if (g.my_rank==0) printf("\n");
-      if (g.my_rank==0) printf("time block : %f\n", t1-t0);
-      END_MASTER(threading)// restore values
-      
-      
-    px->tol = buff_tol;
-    px->b = buff_b;
-    px->x = buff_x;
-    px->print = buff_print1;
-    g.print = buff_print2;
-  } else {
-    error0("Unrecognized operator to apply block power iteration\n");
-  }
-}
 
 
 void bp_qr_double( level_struct* lx, struct Thread* threading ){
@@ -483,37 +276,6 @@ void test_powerit_quality( int op_id, level_struct* lx, struct Thread* threading
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void powerit_non_diff_op( level_struct *l, int i, struct Thread *threading ){
       
   int start, end;
@@ -525,7 +287,6 @@ void powerit_non_diff_op( level_struct *l, int i, struct Thread *threading ){
       
   vector_double_copy( l->powerit.vecs[i], p->x, start, end, l );
 
-             //if(g.my_rank==0)printf("\n\n------------------NON_DIFF--------------- ");
 }
 
 
@@ -557,14 +318,12 @@ void powerit_diff_op( level_struct *l, int i, struct Thread *threading ){
   SYNC_CORES(threading)
   fgmres_double( p, l, threading );
   
-
   vector_double_minus( l->powerit.vecs[i], p->x, l->powerit.vecs_buff2, start, end, l );
-            //if(g.my_rank==0)printf("\n\n------------------DIFFerencee---------------\n depth = %d \n ", l->depth);
    
 }
 
 void powerit_split_op( level_struct *l, int i, struct Thread *threading ){
-
+//TODO: IMLEMENT BOTH SPLIT OPERATORS
   int start, end;
 
   gmres_double_struct* p = get_p_struct_double( l );
@@ -649,64 +408,6 @@ void powerit_split_op( level_struct *l, int i, struct Thread *threading ){
 
 
 
-void block_powerit_driver_double( level_struct* l, struct Thread* threading ){
-
-  int i,op_id,spec_type;
-
-  // specify the following in the .ini input file, at different levels
-  // dx trace deflation type: 0   // 0 is difference, 1 is non-difference, 2 is split orthogonal, 3 is no deflation
-  // dx trace deflation nr vectors: 10
-
-  for( i=0;i<g.num_levels;i++ ){
-             // if(g.my_rank==0)printf("\nLevel and request--------------- %d request: %d\n", i, g.trace_deflation_type[i]);
-
-    // in case no deflation is requested
-    if( g.trace_deflation_type[i]==3 ){ continue; }
-    switch(g.trace_deflation_type[i]){
-      case 0:
-        apply_to_one_vector = powerit_diff_op; op_id = _NON_DIFF_OP;
-        break;
-      case 1:
-        apply_to_one_vector = powerit_non_diff_op; op_id = _NON_DIFF_OP;
-        break;
-      case 2:
-        apply_to_one_vector = powerit_split_op; op_id = _SPLIT_OP;
-        break;
-
-      default:
-        error0("Uknown type for operator in block power iteration\n");
-    }
-
-    int depth_bp_op = i;
-    int nr_bp_vecs = g.trace_deflation_nr_vectors[i];
-    double bp_tol = g.trace_powerit_solver_tol[i];
-    int nr_bpi_cycles = g.trace_powerit_cycles[i];
-
-    switch(g.trace_powerit_spectrum_type[i]){
-      case 0:
-        spec_type = _EVs;
-        break;
-      case 1:
-        spec_type = _SVs;
-        break;
-      default:
-        error0("Uknown type of spectrum to be extracted\n");
-    }
-
-    // IMPORTANT :
-    //		   -- always call this operation with the finest-level l
-    //		   -- after calling power iteration, the result is in lx->powerit.vecs, with lx
-    //		      the level struct of the chosen level
-    if( depth_bp_op==(g.num_levels-1) && apply_to_one_vector == powerit_diff_op){
-      error0("There is no difference level operator at the coarsest level\n");
-    }
-
-    block_powerit_double_init_and_alloc( spec_type, op_id, depth_bp_op, nr_bp_vecs, nr_bpi_cycles, bp_tol, l, threading );
-    //blind_bp_op_double_apply( depth_bp_op, l, threading );
-    block_powerit_double( op_id, depth_bp_op, l, threading );
-      
-  }
-}
 
 
 

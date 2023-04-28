@@ -167,7 +167,10 @@
     if(g.my_rank==0)  printf( "... done\n" );
     END_MASTER(thrading);
     
-    //trace +=hutchinson_deflated_direct_term(l, threading);
+    //If deflation vectors are available
+    if(g.trace_deflation_type[l->level] =! 3){
+    trace += hutchinson_deflated_direct_term(l, threading);
+    }
     
     return trace;
   }
@@ -288,8 +291,6 @@
 
   complex_double hutchinson_plain( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
 
-    // TODO : deflate .. depends, left, right, or both. For now, focus on : deflating from the left
-
     {
       int start, end;
       gmres_double_struct* p = get_p_struct_double( l );
@@ -306,8 +307,11 @@
       int start, end;
       gmres_double_struct* p = get_p_struct_double( l );
       compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
-	     // hutchinson_deflate_vector_double(p->x, l, threading);
-      return global_inner_product_double( h->rademacher_vector, p->x, p->v_start, p->v_end, l, threading );   
+      
+      if(g.trace_deflation_type[l->level] =! 3){
+        hutchinson_deflate_vector_double(p->x, l, threading); 
+      }
+       return global_inner_product_double( h->rademacher_vector, p->x, p->v_start, p->v_end, l, threading );   
     }
   }
 
