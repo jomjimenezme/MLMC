@@ -120,7 +120,7 @@ int main( int argc, char **argv ) {
 
     double t_powerit0, t_powerit1;
     t_powerit0 = MPI_Wtime();
-    block_powerit_driver_double( &l, &threading );
+   // block_powerit_driver_double( &l, &threading );
     t_powerit1 =MPI_Wtime();
     START_MASTER(threadingx)
     if(g.my_rank==0)printf("TIME POWER IT  %f\n", t_powerit1-t_powerit0);
@@ -129,25 +129,25 @@ int main( int argc, char **argv ) {
 
 
   //TODO: KEEP THIS BEFORE ALLOCATING MEMORY OR MOVE TO .ini 
-    l.h_double.max_iters = 5;
-    l.h_double.min_iters = 5;
+    l.h_double.max_iters = 1000;
+    l.h_double.min_iters = 1000;
     l.h_double.trace_tol = 1.0e-4;
     hutchinson_diver_double_init( &l, &threading );  
     hutchinson_diver_double_alloc( &l, &threading );
     complex_double trace, rtrace;
 
     
-    START_MASTER(threadingx)
+   /* START_MASTER(threadingx)
     if(g.my_rank==0) printf("Computing ROUGH trace through PLAIN Hutchinson ...\n");
     END_MASTER(threadingx)
     SYNC_MASTER_TO_ALL(threadingx)
-    //rtrace = hutchinson_driver_double( &l, &threading );
+    rtrace = hutchinson_driver_double( &l, &threading );
     rtrace=778.0;      
     START_MASTER(threadingx)
     if(g.my_rank==0) printf("\n... done\n\n");
     END_MASTER(threadingx)
     SYNC_MASTER_TO_ALL(threadingx)
-
+*/
 
     
     // ------------ Trace with MLMC------------------------------------
@@ -172,13 +172,13 @@ int main( int argc, char **argv ) {
     
     
     
-    /*trace = hutchinson_driver_double( &l, &threading );
+    trace = hutchinson_driver_double( &l, &threading );
 
     START_MASTER(threadingx)
     if(g.my_rank==0) 
       printf("Resulting trace  = %f+i%f\n\n", CSPLIT(trace));
     END_MASTER(threadingx)
-    
+    /*
     trace = mlmc_hutchinson_driver_double( &l, &threading );
 
     START_MASTER(threadingx)
@@ -218,7 +218,7 @@ int main( int argc, char **argv ) {
 */
    
     hutchinson_diver_double_free( &l, &threading );
-    //block_powerit_double_free( &l, &threading );
+   // block_powerit_double_free( &l, &threading );
     
   }
 

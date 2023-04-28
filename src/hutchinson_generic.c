@@ -70,7 +70,7 @@
   void apply_R_double( vector_double out, vector_double in, level_struct* l, struct Thread *threading );
   int apply_solver_double( level_struct* l, struct Thread *threading );
   gmres_double_struct* get_p_struct_double( level_struct* l );
-
+  complex_double hutchinson_deflated_direct_term(level_struct *l, struct Thread *threading);
 
   // type : in case of 0 create Rademacher vectors at level l, in case of 1 create Rademacher vectors at level l->next_level
   struct sample hutchinson_blind_double( level_struct *l, hutchinson_double_struct* h, int type, struct Thread *threading ){
@@ -106,7 +106,10 @@
 
       if( i!=0 ){
         variance = 0.0;
-        trace = estimate.acc_trace/(i+1);
+	estimate.sample_size = i+1;
+        trace = estimate.acc_trace/estimate.sample_size;
+
+        //trace = estimate.acc_trace/(i+1);
         for( j=0; j<i; j++ ){
           variance += conj(samples[j] - trace) * (samples[j] - trace);
         }
@@ -121,30 +124,10 @@
     double t1 = MPI_Wtime();
 
     START_MASTER(threading);
-    if(g.my_rank==0) printf( "%d\t \tvariance = %f+i%f \t t = %f, \t d = %.3f\n", i, CSPLIT(variance), t1-t0, h->tol_per_level[l->depth]);
+    if(g.my_rank==0) printf( "%d\t \tvariance = %f+i%f \t t = %f, \n", i, CSPLIT(variance), t1-t0);// h->tol_per_level[l->depth]);
     END_MASTER(threading);
     estimate.sample_size = i;
 
-    // direct part
-
-    double t0 = MPI_Wtime();
-    estimate.direct_trace = 0.0;
-    for( i=0; i<l->powerit.nr_vecs;i++ ){
-
-      // 0. create small matrix to store all dot products, let's call it small_T
-      // TODO ...
-
-      // 1. apply the operator on the ith deflation vector
-      // TODO ...
-
-      // 2. dot product (do only the diagonal ones)
-      // TODO ...
-
-      // 3. take trace of small_T, store in estimate.direct_trace
-      // TODO ...
-
-    }
-    double t1 = MPI_Wtime();
 
     free(samples);
 
@@ -183,7 +166,9 @@
     START_MASTER(threading);
     if(g.my_rank==0)  printf( "... done\n" );
     END_MASTER(thrading);
-
+    
+    //trace +=hutchinson_deflated_direct_term(l, threading);
+    
     return trace;
   }
 
@@ -321,6 +306,7 @@
       int start, end;
       gmres_double_struct* p = get_p_struct_double( l );
       compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+	     // hutchinson_deflate_vector_double(p->x, l, threading);
       return global_inner_product_double( h->rademacher_vector, p->x, p->v_start, p->v_end, l, threading );   
     }
   }
@@ -404,29 +390,7 @@
     }
   }
 
-  void hutchinson_deflate_vector_double(vector_double input, level_struct *l, struct Thread *threading ){
-    int start, end;
-    gmres_double_struct* p = get_p_struct_double( l);
-    compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
 
-    complex_double aux[l->powerit.nr_vecs];
-    
-    for( int i=0;i<l->powerit.nr_vecs;i++ ){
-      aux[i] = global_inner_product_double(l->powerit.vecs[i], input, p->v_start, p->v_end, l, threading);	
-    }
-      
-    vector_double_scale( l->powerit.vecs_buff1 , l->powerit.vecs[0], aux[0], start, end, l);
-    for( int i=1;  i< l->powerit.nr_vecs; i++ ){
-      
-      vector_double_copy(l->powerit.vecs_buff3, l->powerit.vecs_buff1, start, end, l);
-      vector_double_scale( l->powerit.vecs_buff2, l->powerit.vecs[i], aux[i], start, end, l);
-      vector_double_plus( l->powerit.vecs_buff1 , l->powerit.vecs_buff3 , l->powerit.vecs_buff2, start, end, l);
-
-    }
-    
-    vector_double_minus(  input, input, l->powerit.vecs_buff1, start, end, l );
-    
-  }
 
   // the term tr( R A_{l}^{-1} P - A_{l+1}^{-1} )
   complex_double hutchinson_split_intermediate( level_struct *l, hutchinson_double_struct* h, struct Thread *threading ){
@@ -584,4 +548,92 @@
     else{
       return &(l->p_double);
     }
+  }
+
+
+
+
+
+
+
+
+    // direct term
+  complex_double hutchinson_deflated_direct_term(level_struct *l, struct Thread *threading){
+    double td0 = MPI_Wtime();
+    int i, start, end;
+    complex_double direct_trace = 0.0;
+    gmres_double_struct* p = get_p_struct_double( l );
+    compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+    // 0. create small matrix to store all dot products, let's call it small_T
+    complex_double small_T[l->powerit.nr_vecs];
+    
+    vector_double* vecs_buff1;
+    vector_double* vecs_buff2;
+
+    vecs_buff1 = NULL;
+    vecs_buff2 = NULL;
+  
+    PUBLIC_MALLOC( vecs_buff2, complex_double*, l->powerit.nr_vecs );
+    PUBLIC_MALLOC( vecs_buff1, complex_double*, l->powerit.nr_vecs );
+  
+    vecs_buff1[0] = NULL;
+    vecs_buff2[0] = NULL;
+  
+    PUBLIC_MALLOC( vecs_buff1[0], complex_double, l->powerit.nr_vecs*l->vector_size );
+    PUBLIC_MALLOC( vecs_buff2[0], complex_double, l->powerit.nr_vecs*l->vector_size );
+  
+    START_MASTER(threading)
+    for( i=1;i<l->powerit.nr_vecs;i++ ){
+      vecs_buff1[i] = vecs_buff1[0] + i*l->vector_size;
+      vecs_buff2[i] = vecs_buff2[0] + i*l->vector_size;
+    }
+    END_MASTER(threading)
+    SYNC_CORES(threading)
+
+
+
+    for( i=0; i<l->powerit.nr_vecs;i++ ){
+
+      // 1. apply the operator on the ith deflation vector
+      // TODO ...
+      vector_double_copy(p->b, l->powerit.vecs[i], start, end, l);  
+      apply_solver_double( l, threading );
+      vector_double_copy(l->powerit.vecs_buff1, p->x, start, end, l);  
+      
+      // 2. dot product (do only the diagonal ones)
+      // TODO ...
+      small_T[i] = global_inner_product_double( l->powerit.vecs[i], l->powerit.vecs_buff1, p->v_start, p->v_end, l, threading );
+
+      // 3. take trace of small_T, store in estimate.direct_trace
+      // TODO ...
+      direct_trace += small_T[i];
+    }
+    double td1 = MPI_Wtime();
+    
+    return direct_trace;
+  }
+
+  
+  void hutchinson_deflate_vector_double(vector_double input, level_struct *l, struct Thread *threading ){
+    int start, end;
+    gmres_double_struct* p = get_p_struct_double( l);
+    compute_core_start_end( 0, l->inner_vector_size, &start, &end, l, threading );
+
+    complex_double aux[l->powerit.nr_vecs];
+    
+    for( int i = 0; i<l->powerit.nr_vecs; i++ ){
+      aux[i] = global_inner_product_double(l->powerit.vecs[i], input, p->v_start, p->v_end, l, threading);	
+    }
+      
+    vector_double_scale( l->powerit.vecs_buff1 , l->powerit.vecs[0], aux[0], start, end, l);
+    for( int i = 1;  i< l->powerit.nr_vecs; i++ ){
+      
+      vector_double_copy(l->powerit.vecs_buff3, l->powerit.vecs_buff1, start, end, l);
+      vector_double_scale( l->powerit.vecs_buff2, l->powerit.vecs[i], aux[i], start, end, l);
+      vector_double_plus( l->powerit.vecs_buff1 , l->powerit.vecs_buff3 , l->powerit.vecs_buff2, start, end, l);
+
+    }
+    
+    vector_double_minus(  input, input, l->powerit.vecs_buff1, start, end, l );
+    
   }
